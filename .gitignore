@@ -22,3 +22,4 @@ OSME/
 # IDE
 .vscode/
 .idea/
+.ico_b64.txt\n.ico_data_uri.txt
