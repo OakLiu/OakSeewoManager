@@ -1264,11 +1264,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 <div id="app-layout" class="app-layout">
   <aside class="sidebar">
     <div class="sidebar-logo" style="flex-direction:row">
-      <svg viewBox="0 0 100 100" width="20" height="20">
-        <path d="M82 30L82 55C82 75 50 90 50 90 50 90 18 75 18 55L18 30 50 15Z" fill="var(--ac)" opacity=".3"/>
-        <path d="M82 30L82 55C82 75 50 90 50 90 50 90 18 75 18 55L18 30 50 15Z" stroke="var(--ac)" stroke-width="4" fill="none"/>
-        <text x="50" y="67" text-anchor="middle" fill="var(--ac)" font-size="36" font-weight="bold">O</text>
-      </svg>
+      <img src="__ICO_DATA_URI__" style="width:20px;height:20px">
       <span>OSM</span>
     </div>
     <nav class="sidebar-nav">
@@ -1791,10 +1787,23 @@ function updateModeInfo(){
 </html>"""
 
 
+_ICO_CACHE = None
+def _get_ico_data_uri():
+    global _ICO_CACHE
+    if _ICO_CACHE is None:
+        try:
+            ico_path = os.path.join(BASE_DIR, 'Oak.ico')
+            with open(ico_path, 'rb') as f:
+                _ICO_CACHE = 'data:image/x-icon;base64,' + base64.b64encode(f.read()).decode()
+        except:
+            _ICO_CACHE = ''
+    return _ICO_CACHE
+
 def get_html(has_password, require_password=True):
     html = HTML_TEMPLATE
     html = html.replace('__HAS_PASSWORD__', 'true' if has_password else 'false')
     html = html.replace('__REQUIRE_PASSWORD__', 'true' if require_password else 'false')
+    html = html.replace('__ICO_DATA_URI__', _get_ico_data_uri())
     return html
 
 
@@ -1807,8 +1816,9 @@ def start_gui(overlay_mgr, config):
     import webview
 
     html = get_html('password_hash' in config, config.get('require_password', True))
+    ico = os.path.join(BASE_DIR, 'Oak.ico') if os.path.exists(os.path.join(BASE_DIR, 'Oak.ico')) else None
     webview.create_window(
-        'ScreenGuard -- 全屏远程监视屏蔽',
+        'OakSeewoManager',
         html=html,
         js_api=api,
         width=800,
@@ -1816,6 +1826,7 @@ def start_gui(overlay_mgr, config):
         min_size=(640, 480),
         resizable=True,
         frameless=False,
+        icon=ico,
     )
     webview.start(gui=None, debug=False)
 
