@@ -1263,11 +1263,13 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 
 <div id="app-layout" class="app-layout">
   <aside class="sidebar">
-    <div class="sidebar-logo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="var(--ac)" stroke-width="2">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    <div class="sidebar-logo" style="flex-direction:row">
+      <svg viewBox="0 0 100 100" width="20" height="20">
+        <path d="M82 30L82 55C82 75 50 90 50 90 50 90 18 75 18 55L18 30 50 15Z" fill="var(--ac)" opacity=".3"/>
+        <path d="M82 30L82 55C82 75 50 90 50 90 50 90 18 75 18 55L18 30 50 15Z" stroke="var(--ac)" stroke-width="4" fill="none"/>
+        <text x="50" y="67" text-anchor="middle" fill="var(--ac)" font-size="36" font-weight="bold">O</text>
       </svg>
-      <span>Guard</span>
+      <span>OSM</span>
     </div>
     <nav class="sidebar-nav">
       <button class="nav-item active" data-view="protection" onclick="switchView('protection')">
@@ -1284,7 +1286,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
         <span class="nl">设置</span>
       </button>
     </nav>
-    <div class="sidebar-ft">v3.0</div>
+    <div class="sidebar-ft" style="text-align:center;width:100%">Beta1.0</div>
   </aside>
 
   <div class="content">
@@ -1826,7 +1828,7 @@ def start_gui(overlay_mgr, config):
 
 def main():
     print("=" * 48)
-    print("  ScreenGuard v3.0 -- 全屏远程监视屏蔽")
+    print("  OakSeewoManager Beta1.0 -- 全屏远程监视屏蔽")
     print("=" * 48)
     print()
 

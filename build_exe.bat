@@ -4,7 +4,7 @@ title ScreenGuard - Packaging to EXE
 cd /d "%~dp0"
 
 echo ============================================
-echo   ScreenGuard v3.0 - EXE Builder
+echo   OakSeewoManager Beta1.0 - EXE Builder
 echo ============================================
 echo.
 
