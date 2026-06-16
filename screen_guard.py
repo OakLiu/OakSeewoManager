@@ -780,15 +780,28 @@ def _ov_service():
             user32.DispatchMessageW(ctypes.byref(msg))
         # 每 2.5 秒更新窗口位置
         tick += 1
-        if overlays and tick % 50 == 0:
+        if overlays and tick % 25 == 0:
             new_list = []
             for ov, target in overlays:
+                visible = False
                 if target and user32.IsWindow(target):
-                    rect = wintypes.RECT()
-                    user32.GetWindowRect(target, ctypes.byref(rect))
-                    user32.SetWindowPos(ov, target, rect.left, rect.top,
-                        rect.right - rect.left, rect.bottom - rect.top, 0x0010)
-                    new_list.append((ov, target))
+                    if user32.IsWindowVisible(target):
+                        # 检查目标是否被其他窗口遮挡
+                        rect = wintypes.RECT()
+                        user32.GetWindowRect(target, ctypes.byref(rect))
+                        cx = (rect.left + rect.right) // 2
+                        cy = (rect.top + rect.bottom) // 2
+                        pt = wintypes.POINT(cx, cy)
+                        top = user32.WindowFromPoint(pt)
+                        visible = (top == target)
+                    if visible:
+                        user32.SetWindowPos(ov, 0, rect.left, rect.top,
+                            rect.right - rect.left, rect.bottom - rect.top, 0x0010)
+                        user32.ShowWindow(ov, 1)
+                        new_list.append((ov, target))
+                    else:
+                        user32.ShowWindow(ov, 0)  # 被遮挡时隐藏
+                        new_list.append((ov, target))
                 else:
                     user32.DestroyWindow(ov)
             overlays[:] = new_list
@@ -812,7 +825,7 @@ def _create_per_window_overlay(hwnd_target, class_name, hinstance):
     h_ = rect.bottom - rect.top
     if w <= 0 or h_ <= 0:
         return None
-    ex = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
+    ex = WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
     hwnd = user32.CreateWindowExW(
         ex, class_name, "SG", WS_POPUP | WS_VISIBLE,
         rect.left, rect.top, w, h_, None, None, hinstance, None)
@@ -823,8 +836,6 @@ def _create_per_window_overlay(hwnd_target, class_name, hinstance):
         if not user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE):
             user32.DestroyWindow(hwnd)
             return None
-    # Z 序：放在目标窗口正上方
-    user32.SetWindowPos(hwnd, hwnd_target, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010)
     return hwnd
 
 def _picker_service_main():
