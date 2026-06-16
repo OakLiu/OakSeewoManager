@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build_temp/
+*.spec
+
+# Project runtime
+config.json
+.overlay_pid
+.overlay_err
+.overlay_debug.log
+.inject.log
+
+# Backup
+backup/
+
+# Packaging output
+OSME/
+
+# IDE
+.vscode/
+.idea/
