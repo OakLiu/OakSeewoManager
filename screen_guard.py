@@ -793,7 +793,7 @@ def _ov_service():
                         cy = (rect.top + rect.bottom) // 2
                         pt = wintypes.POINT(cx, cy)
                         top = user32.WindowFromPoint(pt)
-                        visible = (top == target)
+                        visible = (top == target or top == ov)
                     if visible:
                         user32.SetWindowPos(ov, 0, rect.left, rect.top,
                             rect.right - rect.left, rect.bottom - rect.top, 0x0010)
