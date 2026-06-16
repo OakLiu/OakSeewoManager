@@ -783,27 +783,19 @@ def _ov_service():
         if overlays and tick % 25 == 0:
             new_list = []
             for ov, target in overlays:
-                if target and user32.IsWindow(target):
+                if target and user32.IsWindow(target) and user32.IsWindowVisible(target):
                     rect = wintypes.RECT()
                     user32.GetWindowRect(target, ctypes.byref(rect))
-                    cx = (rect.left + rect.right) // 2
-                    cy = (rect.top + rect.bottom) // 2
-                    # 暂隐覆盖层，检查目标是否可见
-                    user32.ShowWindow(ov, 0)
-                    time.sleep(0.01)
-                    pt = wintypes.POINT(cx, cy)
-                    top = user32.WindowFromPoint(pt)
-                    visible = (top == target)
+                    user32.SetWindowPos(ov, 0, rect.left, rect.top,
+                        rect.right - rect.left, rect.bottom - rect.top, 0x0010)
                     user32.ShowWindow(ov, 1)
-                    if visible:
-                        user32.SetWindowPos(ov, 0, rect.left, rect.top,
-                            rect.right - rect.left, rect.bottom - rect.top, 0x0010)
+                    new_list.append((ov, target))
+                else:
+                    user32.ShowWindow(ov, 0)
+                    if target and user32.IsWindow(target):
                         new_list.append((ov, target))
                     else:
-                        user32.ShowWindow(ov, 0)  # 被其他窗口遮挡
-                        new_list.append((ov, target))
-                else:
-                    user32.DestroyWindow(ov)
+                        user32.DestroyWindow(ov)
             overlays[:] = new_list
         time.sleep(0.05)
 
@@ -1291,14 +1283,6 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
         </svg>
         <span class="nl">设置</span>
       </button>
-      <button class="nav-item" data-view="about" onclick="switchView('settings')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="16" x2="12" y2="12"/>
-          <line x1="12" y1="8" x2="12.01" y2="8"/>
-        </svg>
-        <span class="nl">关于</span>
-      </button>
     </nav>
     <div class="sidebar-ft">v3.0</div>
   </aside>
@@ -1339,6 +1323,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
           </div>
           <div id="target-list" style="margin-top:8px"></div>
           <div id="picker-msg" class="msg" style="margin-top:4px"></div>
+          <div id="win-mode-note" style="display:none;font-size:11px;color:var(--tx-b);margin-top:6px;padding:4px 8px;background:var(--bg-c);border-radius:6px">下层窗口也会被保护</div>
         </div>
         <p id="mode-info" style="font-size:12px;color:var(--tx-b);line-height:1.7;padding:0 18px 18px"></p>
         <div class="card">
@@ -1713,8 +1698,15 @@ function _applyTargetMode(mode){
     b.classList.toggle('active',b.dataset.mode===mode)});
   var tl=document.getElementById('target-list');
   var pm=document.getElementById('picker-msg');
-  if(mode==='window'){tl.style.display='block';loadTargets()}
-  else{tl.style.display='none';if(pm)pm.textContent=''}
+  var note=document.getElementById('win-mode-note');
+  if(mode==='window'){
+    tl.style.display='block';loadTargets();
+    if(note)note.style.display='block';
+  }else{
+    tl.style.display='none';
+    if(pm)pm.textContent='';
+    if(note)note.style.display='none';
+  }
   window.pywebview.api.set_target_mode(mode);
   updateModeInfo();updateStatus();
 }
