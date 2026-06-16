@@ -783,24 +783,24 @@ def _ov_service():
         if overlays and tick % 25 == 0:
             new_list = []
             for ov, target in overlays:
-                visible = False
                 if target and user32.IsWindow(target):
-                    if user32.IsWindowVisible(target):
-                        # 检查目标是否被其他窗口遮挡
-                        rect = wintypes.RECT()
-                        user32.GetWindowRect(target, ctypes.byref(rect))
-                        cx = (rect.left + rect.right) // 2
-                        cy = (rect.top + rect.bottom) // 2
-                        pt = wintypes.POINT(cx, cy)
-                        top = user32.WindowFromPoint(pt)
-                        visible = (top == target or top == ov)
+                    rect = wintypes.RECT()
+                    user32.GetWindowRect(target, ctypes.byref(rect))
+                    cx = (rect.left + rect.right) // 2
+                    cy = (rect.top + rect.bottom) // 2
+                    # 暂隐覆盖层，检查目标是否可见
+                    user32.ShowWindow(ov, 0)
+                    time.sleep(0.01)
+                    pt = wintypes.POINT(cx, cy)
+                    top = user32.WindowFromPoint(pt)
+                    visible = (top == target)
+                    user32.ShowWindow(ov, 1)
                     if visible:
                         user32.SetWindowPos(ov, 0, rect.left, rect.top,
                             rect.right - rect.left, rect.bottom - rect.top, 0x0010)
-                        user32.ShowWindow(ov, 1)
                         new_list.append((ov, target))
                     else:
-                        user32.ShowWindow(ov, 0)  # 被遮挡时隐藏
+                        user32.ShowWindow(ov, 0)  # 被其他窗口遮挡
                         new_list.append((ov, target))
                 else:
                     user32.DestroyWindow(ov)
