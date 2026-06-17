@@ -963,6 +963,7 @@ class WebApi:
     def __init__(self, overlay_mgr, config):
         self.overlay = overlay_mgr
         self.config = config
+        self._drag_thr = None
 
     def check_password(self, password):
         stored = self.config.get('password_hash', '')
@@ -1223,28 +1224,40 @@ class WebApi:
             return {'ok': True}
         return {'ok': False}
 
-    def get_window_pos(self):
+    def start_window_drag(self):
+        """启动窗口拖拽：后台轮询光标位置，GetAsyncKeyState 检测释放"""
+        if getattr(self, '_drag_thr', None) and self._drag_thr.is_alive():
+            return
         import webview
-        if webview.windows:
-            w = webview.windows[0]
-            try:
-                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
-                rect = wintypes.RECT()
-                user32.GetWindowRect(h, ctypes.byref(rect))
-                return {'x': rect.left, 'y': rect.top}
-            except Exception:
-                pass
-        return {'x': 0, 'y': 0}
+        if not webview.windows:
+            return
+        w = webview.windows[0]
+        try:
+            h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
+        except Exception:
+            return
+        rect = wintypes.RECT()
+        user32.GetWindowRect(h, ctypes.byref(rect))
+        pt = wintypes.POINT()
+        user32.GetCursorPos(ctypes.byref(pt))
+        wx, wy = rect.left, rect.top
+        cx, cy = pt.x, pt.y
 
-    def move_window_to(self, x, y):
-        import webview
-        if webview.windows:
-            w = webview.windows[0]
+        def _loop():
             try:
-                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
-                user32.SetWindowPos(h, 0, int(x), int(y), 0, 0, 0x0005)
+                while user32.GetAsyncKeyState(0x01) & 0x8000:
+                    cur = wintypes.POINT()
+                    user32.GetCursorPos(ctypes.byref(cur))
+                    dx = cur.x - cx
+                    dy = cur.y - cy
+                    if dx or dy:
+                        user32.SetWindowPos(h, 0, wx + dx, wy + dy, 0, 0, 0x0005)
+                    time.sleep(0.008)
             except Exception:
                 pass
+
+        self._drag_thr = threading.Thread(target=_loop, daemon=True)
+        self._drag_thr.start()
 
     def minimize_window(self):
         import webview
@@ -1312,7 +1325,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 .app-body{display:flex;flex:1;min-height:0;width:100%}
 .__FRAMELESS__ .titlebar{display:flex}
 .__FRAMELESS__ .titlebar{display:flex}
-.app-layout .sidebar{width:130px;flex-shrink:0;height:100vh;display:flex;flex-direction:column;padding:10px 0;border-right:1px solid var(--bd);background:var(--bg-c)}
+.app-layout .sidebar{width:130px;flex-shrink:0;height:100%;display:flex;flex-direction:column;padding:10px 0;border-right:1px solid var(--bd);background:var(--bg-c)}
 .sidebar-logo{margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--tx-c);user-select:none}
 .sidebar-logo svg{width:20px;height:20px}
 .sidebar-logo span{font-size:13px;font-weight:600}
@@ -2167,25 +2180,10 @@ function pollCrackProgress(type){
 (function(){
   var tb = document.getElementById('titlebar');
   if(!tb)return;
-  var ds = null;
-  function onDown(e){
+  tb.addEventListener('pointerdown', function(e){
     if(e.button !== 0)return;
-    tb.setPointerCapture(e.pointerId);
-    ds = {sx:e.screenX, sy:e.screenY, wx:0, wy:0};
-    window.pywebview.api.get_window_pos().then(function(p){if(ds){ds.wx=p.x;ds.wy=p.y}});
-  }
-  function onMove(e){
-    if(!ds)return;
-    window.pywebview.api.move_window_to(ds.wx+(e.screenX-ds.sx), ds.wy+(e.screenY-ds.sy));
-  }
-  function onEnd(e){
-    ds = null;
-    try{tb.releasePointerCapture(e.pointerId)}catch(ex){}
-  }
-  tb.addEventListener('pointerdown', onDown);
-  tb.addEventListener('pointermove', onMove);
-  tb.addEventListener('pointerup', onEnd);
-  tb.addEventListener('pointercancel', onEnd);
+    window.pywebview.api.start_window_drag();
+  });
 })();
 function minimizeWin(){window.pywebview.api.minimize_window();}
 function maximizeWin(){window.pywebview.api.toggle_maximize_window();}
