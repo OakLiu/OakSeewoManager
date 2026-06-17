@@ -1223,6 +1223,57 @@ class WebApi:
             return {'ok': True}
         return {'ok': False}
 
+    def get_window_pos(self):
+        import webview
+        if webview.windows:
+            w = webview.windows[0]
+            try:
+                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
+                rect = wintypes.RECT()
+                user32.GetWindowRect(h, ctypes.byref(rect))
+                return {'x': rect.left, 'y': rect.top}
+            except Exception:
+                pass
+        return {'x': 0, 'y': 0}
+
+    def move_window_to(self, x, y):
+        import webview
+        if webview.windows:
+            w = webview.windows[0]
+            try:
+                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
+                user32.SetWindowPos(h, 0, int(x), int(y), 0, 0, 0x0005)
+            except Exception:
+                pass
+
+    def minimize_window(self):
+        import webview
+        if webview.windows:
+            try:
+                h = webview.windows[0].native.handle if hasattr(webview.windows[0].native, 'handle') else int(webview.windows[0].native)
+                user32.ShowWindow(h, 6)
+            except Exception:
+                pass
+
+    def toggle_maximize_window(self):
+        import webview
+        if webview.windows:
+            w = webview.windows[0]
+            try:
+                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
+                style = user32.GetWindowLongW(h, -16)
+                if style & 0x00010000:
+                    user32.ShowWindow(h, 9)
+                else:
+                    user32.ShowWindow(h, 3)
+            except Exception:
+                pass
+
+    def close_window(self):
+        import webview
+        if webview.windows:
+            webview.windows[0].hide()
+
     def _exit(self):
         import webview
         if webview.windows:
@@ -1250,8 +1301,17 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 .fp-card{background:var(--bg-b);border-radius:12px;padding:32px 28px;box-shadow:0 4px 20px rgba(0,0,0,.15);text-align:center;width:340px}
 .fp-card h1{font-size:22px;font-weight:300;color:var(--tx-c);margin-bottom:4px}
 .fp-card .sub{font-size:12px;color:var(--tx-b);margin-bottom:20px}
-.app-layout{display:none;height:100vh;width:100vw}
+.app-layout{display:none;height:100vh;width:100vw;flex-direction:column}
 .app-layout.active{display:flex}
+.titlebar{height:32px;display:none;align-items:center;justify-content:space-between;background:var(--bg-c);flex-shrink:0;user-select:none;cursor:default}
+.titlebar .tb-title{font-size:12px;color:var(--tx-b);padding-left:12px;white-space:nowrap}
+.titlebar .tb-controls{display:flex;height:100%}
+.tb-btn{width:46px;height:32px;border:none;background:transparent;color:var(--tx-b);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:system-ui;transition:.1s}
+.tb-btn:hover{background:var(--bd);color:var(--tx-a)}
+.tb-btn.tb-close:hover{background:var(--ng);color:#fff}
+.app-body{display:flex;flex:1;min-height:0;width:100%}
+.__FRAMELESS__ .titlebar{display:flex}
+.__FRAMELESS__ .titlebar{display:flex}
 .app-layout .sidebar{width:130px;flex-shrink:0;height:100vh;display:flex;flex-direction:column;padding:10px 0;border-right:1px solid var(--bd);background:var(--bg-c)}
 .sidebar-logo{margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--tx-c);user-select:none}
 .sidebar-logo svg{width:20px;height:20px}
@@ -1340,7 +1400,16 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
   </div>
 </div>
 
-<div id="app-layout" class="app-layout">
+<div id="app-layout" class="app-layout __FRAMELESS__">
+  <div id="titlebar" class="titlebar">
+    <span class="tb-title">OakSeewoManager</span>
+    <div class="tb-controls">
+      <button class="tb-btn" onclick="minimizeWin()" title="最小化">─</button>
+      <button class="tb-btn" onclick="maximizeWin()" title="最大化">□</button>
+      <button class="tb-btn tb-close" onclick="closeWin()" title="关闭">✕</button>
+    </div>
+  </div>
+  <div class="app-body">
   <aside class="sidebar">
     <div class="sidebar-logo" style="flex-direction:row">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
@@ -1576,6 +1645,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
     </div>
 
   </div>
+</div>
 </div>
 
 <div id="modal-overlay" style="display:none;position:fixed;inset:0;z-index:999;
@@ -2093,6 +2163,33 @@ function pollCrackProgress(type){
   });
 }
 
+// ── 标题栏拖拽 + 窗口控制（frameless） ──
+(function(){
+  var tb = document.getElementById('titlebar');
+  if(!tb)return;
+  var ds = null;
+  function onDown(e){
+    if(e.button !== 0)return;
+    tb.setPointerCapture(e.pointerId);
+    ds = {sx:e.screenX, sy:e.screenY, wx:0, wy:0};
+    window.pywebview.api.get_window_pos().then(function(p){if(ds){ds.wx=p.x;ds.wy=p.y}});
+  }
+  function onMove(e){
+    if(!ds)return;
+    window.pywebview.api.move_window_to(ds.wx+(e.screenX-ds.sx), ds.wy+(e.screenY-ds.sy));
+  }
+  function onEnd(e){
+    ds = null;
+    try{tb.releasePointerCapture(e.pointerId)}catch(ex){}
+  }
+  tb.addEventListener('pointerdown', onDown);
+  tb.addEventListener('pointermove', onMove);
+  tb.addEventListener('pointerup', onEnd);
+  tb.addEventListener('pointercancel', onEnd);
+})();
+function minimizeWin(){window.pywebview.api.minimize_window();}
+function maximizeWin(){window.pywebview.api.toggle_maximize_window();}
+function closeWin(){window.pywebview.api.close_window();}
 </script>
 </body>
 </html>"""
@@ -2102,6 +2199,7 @@ def get_html(has_password, require_password=True, preview_enabled=True, preview_
     html = HTML_TEMPLATE
     html = html.replace('__HAS_PASSWORD__', 'true' if has_password else 'false')
     html = html.replace('__REQUIRE_PASSWORD__', 'true' if require_password else 'false')
+    html = html.replace('__FRAMELESS__', 'frameless' if getattr(sys, 'frozen', False) else '')
     html = html.replace('__PREVIEW_ENABLED__', 'true' if preview_enabled else 'false')
     html = html.replace('__PREVIEW_INTERVAL__', str(preview_interval))
     return html
@@ -2458,7 +2556,7 @@ def start_gui(overlay_mgr, config):
         height=600,
         min_size=(640, 480),
         resizable=True,
-        frameless=False,
+        frameless=getattr(sys, 'frozen', False),
     )
 
     def restore_win():
