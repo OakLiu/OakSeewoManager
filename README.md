@@ -1,15 +1,16 @@
 # OakSeewoManager
 
-全屏远程监视屏蔽工具。基于 Windows `SetWindowDisplayAffinity(WDA_MONITOR)` API，创建透明覆盖层使远程监视/录屏软件只能捕获到黑屏。
+全屏远程监视屏蔽工具 + 希沃密码破解工具。基于 Windows `SetWindowDisplayAffinity(WDA_MONITOR)` API，创建透明覆盖层使远程监视/录屏软件只能捕获到黑屏。
 
 ## 功能
 
-- **全屏保护** — 整个屏幕在远程监视中变为黑色
-- **窗口保护** — 仅保护选中的指定窗口（下层窗口也会被保护，部分窗口暂时无法保护）
+- **防窥屏（全屏/窗口模式）** — 整个屏幕或指定窗口在远程监视中变为黑色
 - **模拟监控画面** — 实时 BitBlt 屏幕捕获预览（可开关，可调刷新间隔 0.5s–5s）
+- **密码破解** — 基于 PASSWORDV3 算法暴力破解希沃冰点还原/锁屏密码（6 位数字）
 - **密码保护** — 可开关
-- **亮/暗主题** — 跟随系统设置
+- **亮/暗主题** — 跟随系统设置（暗色主题为 GitHub 风格配色）
 - **自定关闭行为** — GUI 关闭后可选择是否保持保护
+- **无边框窗口**（EXE 模式）— 右上角最小化/最大化/关闭按钮
 
 ## 使用
 
@@ -34,6 +35,8 @@ build_exe.bat
 ```
 
 输出到 `OSM_exe\OakSeewoManager.exe`
+
+EXE 模式自动启用无边框窗口及右上角窗口控制按钮。
 
 ## 技术原理
 
@@ -62,11 +65,13 @@ build_exe.bat
 
 ```
 OakSeewoManager/
-  OakSeewoManager.py      # 主程序
+  OakSeewoManager.py      # 主程序 (2000+ 行)
   OakSeewoManager.bat     # 双击启动
-  build_exe.bat        # EXE 打包脚本
-  Oak.ico              # 程序图标
-  OSM_exe.zip          # 预打包 EXE
+  build_exe.bat            # EXE 打包脚本
+  Oak.ico                  # 程序图标
+  CHANGELOG.md             # 更新日志
+  OSM_exe.zip              # 预打包 EXE
+  config.json              # 用户配置
   .gitignore
   README.md
 ```
