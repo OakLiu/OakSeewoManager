@@ -1223,75 +1223,6 @@ class WebApi:
             return {'ok': True}
         return {'ok': False}
 
-    def start_window_drag(self):
-        """临时添加标题栏，启动原生拖拽，拖完恢复无边框"""
-        import webview
-        if not webview.windows:
-            return
-        w = webview.windows[0]
-        try:
-            h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
-        except Exception:
-            return
-        needs_caption = False
-        original_style = 0
-        try:
-            GWL_STYLE = -16
-            WS_CAPTION = 0x00C00000
-            WS_SYSMENU = 0x00080000
-            original_style = user32.GetWindowLongW(h, GWL_STYLE)
-            needs_caption = not (original_style & WS_CAPTION)
-            if needs_caption:
-                user32.SetWindowLongW(h, GWL_STYLE, original_style | WS_CAPTION | WS_SYSMENU)
-                user32.SetWindowPos(h, 0, 0, 0, 0, 0, 0x0027)
-            user32.ReleaseCapture()
-            user32.SendMessageW(h, 0x00A1, 2, 0)
-        except Exception:
-            pass
-        finally:
-            if needs_caption:
-                try:
-                    user32.SetWindowLongW(h, GWL_STYLE, original_style)
-                    user32.SetWindowPos(h, 0, 0, 0, 0, 0, 0x0027)
-                except Exception:
-                    pass
-
-    def minimize_window(self):
-        import webview
-        if webview.windows:
-            try:
-                h = webview.windows[0].native.handle if hasattr(webview.windows[0].native, 'handle') else int(webview.windows[0].native)
-                user32.ShowWindow(h, 6)
-            except Exception:
-                pass
-
-    def toggle_maximize_window(self):
-        import webview
-        if webview.windows:
-            w = webview.windows[0]
-            try:
-                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
-                class _WP(ctypes.Structure):
-                    _fields_ = [
-                        ('length', wintypes.UINT), ('flags', wintypes.UINT), ('showCmd', wintypes.UINT),
-                        ('ptMinPos', ctypes.c_long * 2), ('ptMaxPos', ctypes.c_long * 2),
-                        ('rcNormalPos', ctypes.c_long * 4),
-                    ]
-                wp = _WP()
-                wp.length = ctypes.sizeof(wp)
-                user32.GetWindowPlacement(h, ctypes.byref(wp))
-                if wp.showCmd == 3:
-                    user32.ShowWindow(h, 9)
-                else:
-                    user32.ShowWindow(h, 3)
-            except Exception:
-                pass
-
-    def close_window(self):
-        import webview
-        if webview.windows:
-            webview.windows[0].hide()
-
     def _exit(self):
         import webview
         if webview.windows:
@@ -1323,11 +1254,6 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 .app-layout.active{display:flex}
 .app-layout .sidebar{width:130px;flex-shrink:0;height:100vh;display:flex;flex-direction:column;padding:10px 0;border-right:1px solid var(--bd);background:var(--bg-c)}
 .sidebar-logo{margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--tx-c);user-select:none}
-.window-controls{position:absolute;top:0;right:0;z-index:9999;display:none;height:32px;align-items:center}
-.wc-btn{width:36px;height:32px;border:none;background:transparent;color:var(--tx-b);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:system-ui;transition:.1s}
-.wc-btn:hover{background:var(--bd);color:var(--tx-a)}
-.wc-btn.wc-close:hover{background:var(--ng);color:#fff}
-#app-layout.frameless .window-controls{display:flex}
 .sidebar-logo svg{width:20px;height:20px}
 .sidebar-logo span{font-size:13px;font-weight:600}
 .sidebar-nav{display:flex;flex-direction:column;gap:2px;flex:1;padding:0 6px}
@@ -1414,14 +1340,9 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
   </div>
 </div>
 
-<div id="app-layout" class="app-layout __FRAMELESS__">
-  <div id="window-controls" class="window-controls">
-      <button class="wc-btn" onclick="minimizeWin()" title="最小化">─</button>
-      <button class="wc-btn" onclick="maximizeWin()" title="最大化">□</button>
-      <button class="wc-btn wc-close" onclick="closeWin()" title="关闭">✕</button>
-    </div>
+<div id="app-layout" class="app-layout">
   <aside class="sidebar">
-    <div id="window-drag-handle" class="sidebar-logo" style="flex-direction:row;cursor:grab">
+    <div class="sidebar-logo" style="flex-direction:row">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       </svg>
@@ -2172,21 +2093,6 @@ function pollCrackProgress(type){
   });
 }
 
-// ── 窗口拖拽（frameless 模式） ──
-(function(){
-  var handle = document.getElementById('window-drag-handle');
-  if(handle){
-    handle.addEventListener('mousedown', function(e){
-      if(e.button !== 0)return;
-      window.pywebview.api.start_window_drag();
-    });
-  }
-})();
-
-// ── 窗口控制按钮 ──
-function minimizeWin(){window.pywebview.api.minimize_window();}
-function maximizeWin(){window.pywebview.api.toggle_maximize_window();}
-function closeWin(){window.pywebview.api.close_window();}
 </script>
 </body>
 </html>"""
@@ -2196,7 +2102,6 @@ def get_html(has_password, require_password=True, preview_enabled=True, preview_
     html = HTML_TEMPLATE
     html = html.replace('__HAS_PASSWORD__', 'true' if has_password else 'false')
     html = html.replace('__REQUIRE_PASSWORD__', 'true' if require_password else 'false')
-    html = html.replace('__FRAMELESS__', 'frameless' if getattr(sys, 'frozen', False) else '')
     html = html.replace('__PREVIEW_ENABLED__', 'true' if preview_enabled else 'false')
     html = html.replace('__PREVIEW_INTERVAL__', str(preview_interval))
     return html
@@ -2553,7 +2458,7 @@ def start_gui(overlay_mgr, config):
         height=600,
         min_size=(640, 480),
         resizable=True,
-        frameless=getattr(sys, 'frozen', False),
+        frameless=False,
     )
 
     def restore_win():
