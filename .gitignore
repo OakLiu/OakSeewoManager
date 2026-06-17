@@ -16,10 +16,12 @@ config.json
 # Backup
 backup/
 
-# Packaging output
+# Packaging output (dir)
+OSM_exe/
 OSME/
 
 # IDE
 .vscode/
 .idea/
-.ico_b64.txt\n.ico_data_uri.txt
+.ico_b64.txt
+.ico_data_uri.txt

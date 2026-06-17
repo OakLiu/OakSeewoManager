@@ -20,35 +20,43 @@ if %ERRORLEVEL% NEQ 0 (
     )
 )
 
+echo [*] Terminating old EXE instances...
+taskkill /f /im ScreenGuard.exe 2>nul
+timeout /t 2 /nobreak >nul
+
 echo [*] Packaging screen_guard.py to EXE...
 
-set ICON=
-if exist "Oak.ico" set ICON=--icon "Oak.ico"
-if exist "icon.ico" set ICON=--icon "icon.ico"
+:: Clean up old files to prevent PermissionError
+if exist ".\OSM_exe\ScreenGuard.exe" del /f /q ".\OSM_exe\ScreenGuard.exe" 2>nul
+if exist ".\build_temp" rmdir /s /q ".\build_temp" 2>nul
 
-pyinstaller --onefile --windowed --name "ScreenGuard" %ICON% --distpath ".\OSME" --workpath ".\build_temp" --specpath ".\build_temp" screen_guard.py
+:: Use absolute path for icon (PyInstaller resolves relative paths against workpath)
+set ICON_FLAG=
+if exist "%~dp0Oak.ico" set ICON_FLAG=--icon "%~dp0Oak.ico"
+
+pyinstaller --onefile --windowed --name "ScreenGuard" %ICON_FLAG% --distpath ".\OSM_exe" --workpath ".\build_temp" --specpath ".\build_temp" screen_guard.py
 
 if %ERRORLEVEL% NEQ 0 (
     echo [Error] PyInstaller failed
     echo.
     echo Try running without --onefile:
-    echo   pyinstaller --windowed --name "ScreenGuard" --distpath ".\OSME" screen_guard.py
+    echo   pyinstaller --windowed --name "ScreenGuard" --distpath ".\OSM_exe" screen_guard.py
     pause
     exit /b 1
 )
 
 :: Copy supporting files
-if exist ".\config.json" copy ".\config.json" ".\OSME\config.json" >nul
-copy "screen_guard.bat" ".\OSME\screen_guard.bat" >nul
-echo screen_guard.bat >> ".\OSME\.gitignore" 2>nul
+if exist ".\config.json" copy ".\config.json" ".\OSM_exe\config.json" >nul
+copy "screen_guard.bat" ".\OSM_exe\screen_guard.bat" >nul
+echo screen_guard.bat >> ".\OSM_exe\.gitignore" 2>nul
 
 :: Clean up build artifacts
 if exist ".\build_temp" rmdir /s /q ".\build_temp"
 
 echo.
 echo ============================================
-echo   Done! EXE is in .\OSME\ folder
-echo   File: OSME\ScreenGuard.exe
+echo   Done! EXE is in .\OSM_exe\ folder
+echo   File: OSM_exe\ScreenGuard.exe
 echo ============================================
 echo.
 echo Note: The EXE may trigger antivirus false positives

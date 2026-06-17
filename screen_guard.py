@@ -152,6 +152,8 @@ user32.IsWindow.argtypes = [wintypes.HWND]
 user32.IsWindow.restype = wintypes.BOOL
 user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
 user32.GetAncestor.restype = wintypes.HWND
+user32.IsIconic.argtypes = [wintypes.HWND]
+user32.IsIconic.restype = wintypes.BOOL
 user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
 user32.ShowWindow.restype = wintypes.BOOL
 user32.GetForegroundWindow.argtypes = []
@@ -414,7 +416,11 @@ def _scan_windows_by_target(target):
     ENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, wintypes.HWND, wintypes.LPARAM)
     @ENUMPROC
     def enum_proc(hwnd, _):
-        if not user32.IsWindowVisible(hwnd):
+        if user32.IsIconic(hwnd):
+            return 1
+        rect = wintypes.RECT()
+        user32.GetWindowRect(hwnd, ctypes.byref(rect))
+        if rect.right <= rect.left or rect.bottom <= rect.top:
             return 1
         if tg_class and _get_window_class(hwnd) != tg_class:
             return 1
@@ -1264,7 +1270,9 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 <div id="app-layout" class="app-layout">
   <aside class="sidebar">
     <div class="sidebar-logo" style="flex-direction:row">
-      <img src="__ICO_DATA_URI__" style="width:20px;height:20px">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
       <span>OSM</span>
     </div>
     <nav class="sidebar-nav">
@@ -1321,7 +1329,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
           </div>
           <div id="target-list" style="margin-top:8px"></div>
           <div id="picker-msg" class="msg" style="margin-top:4px"></div>
-          <div id="win-mode-note" style="display:none;font-size:11px;color:var(--tx-b);margin-top:6px;padding:4px 8px;background:var(--bg-c);border-radius:6px">下层窗口也会被保护</div>
+          <div id="win-mode-note" style="display:none;font-size:11px;color:var(--tx-b);margin-top:6px;padding:4px 8px;background:var(--bg-c);border-radius:6px">下层窗口也会被保护，部分窗口暂时无法保护</div>
         </div>
         <p id="mode-info" style="font-size:12px;color:var(--tx-b);line-height:1.7;padding:0 18px 18px"></p>
         <div class="card">
@@ -1731,7 +1739,10 @@ function renderTargets(targets){
     for(var i=0;i<targets.length;i++){
       var t=targets[i];
       var proc=t.path?t.path.split(/[/\\\\]/).pop():'';
-      var label=(t.title||'')+(proc?' <span style="color:var(--tx-b);font-size:11px">'+proc+'</span>':'');
+      var cls=t.class||'';
+      var name=proc||cls||'未知';
+      var detail=t.title?(' <span style="color:var(--tx-b);font-size:11px">'+t.title+'</span>'):'';
+      var label='<span style="color:var(--tx-a)">'+name+'</span>'+detail;
       html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:12px;border-bottom:1px solid var(--bd)">'+
         '<span style="color:var(--tx-a);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+label+'</span>'+
         '<button onclick="removeTarget('+i+')" style="background:none;border:none;color:var(--ng);cursor:pointer;font-size:14px;padding:0 4px;flex-shrink:0">&times;</button>'+
@@ -1787,23 +1798,10 @@ function updateModeInfo(){
 </html>"""
 
 
-_ICO_CACHE = None
-def _get_ico_data_uri():
-    global _ICO_CACHE
-    if _ICO_CACHE is None:
-        try:
-            ico_path = os.path.join(BASE_DIR, 'Oak.ico')
-            with open(ico_path, 'rb') as f:
-                _ICO_CACHE = 'data:image/x-icon;base64,' + base64.b64encode(f.read()).decode()
-        except:
-            _ICO_CACHE = ''
-    return _ICO_CACHE
-
 def get_html(has_password, require_password=True):
     html = HTML_TEMPLATE
     html = html.replace('__HAS_PASSWORD__', 'true' if has_password else 'false')
     html = html.replace('__REQUIRE_PASSWORD__', 'true' if require_password else 'false')
-    html = html.replace('__ICO_DATA_URI__', _get_ico_data_uri())
     return html
 
 
@@ -1816,7 +1814,6 @@ def start_gui(overlay_mgr, config):
     import webview
 
     html = get_html('password_hash' in config, config.get('require_password', True))
-    ico = os.path.join(BASE_DIR, 'Oak.ico') if os.path.exists(os.path.join(BASE_DIR, 'Oak.ico')) else None
     webview.create_window(
         'OakSeewoManager',
         html=html,
@@ -1826,7 +1823,6 @@ def start_gui(overlay_mgr, config):
         min_size=(640, 480),
         resizable=True,
         frameless=False,
-        icon=ico,
     )
     webview.start(gui=None, debug=False)
 
