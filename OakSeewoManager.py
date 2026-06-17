@@ -115,6 +115,10 @@ user32.SetCapture.argtypes = [wintypes.HWND]
 user32.SetCapture.restype = wintypes.HWND
 user32.ReleaseCapture.argtypes = []
 user32.ReleaseCapture.restype = wintypes.BOOL
+user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+user32.GetWindowLongW.restype = LONG_PTR
+user32.SetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int, LONG_PTR]
+user32.SetWindowLongW.restype = LONG_PTR
 user32.PostThreadMessageW.argtypes = [wintypes.DWORD, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 user32.PostThreadMessageW.restype = wintypes.BOOL
 
@@ -959,7 +963,6 @@ class WebApi:
     def __init__(self, overlay_mgr, config):
         self.overlay = overlay_mgr
         self.config = config
-        self._drag_hwnd = None
 
     def check_password(self, password):
         stored = self.config.get('password_hash', '')
@@ -1221,9 +1224,7 @@ class WebApi:
         return {'ok': False}
 
     def start_window_drag(self):
-        """启动窗口拖拽：SetCapture + 轮询线程"""
-        if hasattr(self, '_drag_hwnd') and self._drag_hwnd is not None:
-            return
+        """临时添加标题栏，启动原生拖拽，拖完恢复无边框"""
         import webview
         if not webview.windows:
             return
@@ -1232,37 +1233,28 @@ class WebApi:
             h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
         except Exception:
             return
-        rect = wintypes.RECT()
-        user32.GetWindowRect(h, ctypes.byref(rect))
-        pt = wintypes.POINT()
-        user32.GetCursorPos(ctypes.byref(pt))
-        origin_x, origin_y = rect.left, rect.top
-        cursor_x, cursor_y = pt.x, pt.y
-        user32.SetCapture(h)
-        self._drag_hwnd = h
-
-        def _drag_loop(hwnd, wx, wy, cx, cy):
-            try:
-                while True:
-                    if not (user32.GetAsyncKeyState(0x01) & 0x8000):
-                        break
-                    cur = wintypes.POINT()
-                    user32.GetCursorPos(ctypes.byref(cur))
-                    dx = cur.x - cx
-                    dy = cur.y - cy
-                    if dx or dy:
-                        user32.SetWindowPos(hwnd, 0, wx + dx, wy + dy, 0, 0, 0x0005)
-                    time.sleep(0.005)
-            finally:
+        needs_caption = False
+        original_style = 0
+        try:
+            GWL_STYLE = -16
+            WS_CAPTION = 0x00C00000
+            WS_SYSMENU = 0x00080000
+            original_style = user32.GetWindowLongW(h, GWL_STYLE)
+            needs_caption = not (original_style & WS_CAPTION)
+            if needs_caption:
+                user32.SetWindowLongW(h, GWL_STYLE, original_style | WS_CAPTION | WS_SYSMENU)
+                user32.SetWindowPos(h, 0, 0, 0, 0, 0, 0x0027)
+            user32.ReleaseCapture()
+            user32.SendMessageW(h, 0x00A1, 2, 0)
+        except Exception:
+            pass
+        finally:
+            if needs_caption:
                 try:
-                    user32.ReleaseCapture()
+                    user32.SetWindowLongW(h, GWL_STYLE, original_style)
+                    user32.SetWindowPos(h, 0, 0, 0, 0, 0, 0x0027)
                 except Exception:
                     pass
-                self._drag_hwnd = None
-
-        threading.Thread(target=_drag_loop,
-                         args=(h, origin_x, origin_y, cursor_x, cursor_y),
-                         daemon=True).start()
 
     def minimize_window(self):
         import webview
