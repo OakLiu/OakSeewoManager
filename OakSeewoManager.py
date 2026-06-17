@@ -24,6 +24,8 @@ import sys
 import subprocess
 import struct
 import base64
+import configparser
+import winreg
 
 # =========================================================================
 # Windows API 类型 (必须在 WNDCLASSEXW 之前)
@@ -1072,6 +1074,37 @@ class WebApi:
         save_config(self.config)
         return {'ok': True}
 
+    # ── 密码破解 ──
+
+    def get_crack_config(self, crack_type, custom_path=None):
+        result = _get_crack_config(crack_type, custom_path)
+        return result
+
+    def start_crack(self, crack_type):
+        global _crack_state
+        with _crack_lock:
+            if _crack_state.get('running'):
+                return {'ok': False, 'msg': '已有破解任务正在运行'}
+            config = _get_crack_config(crack_type)
+            if not config.get('found'):
+                return {'ok': False, 'msg': config.get('error', '配置检测失败')}
+            _crack_state['_config'] = config
+            _crack_state['crack_type'] = crack_type
+        t = threading.Thread(target=_crack_worker, daemon=True)
+        t.start()
+        return {'ok': True}
+
+    def get_crack_progress(self):
+        global _crack_state
+        with _crack_lock:
+            return dict(_crack_state)
+
+    def cancel_crack(self):
+        global _crack_state
+        with _crack_lock:
+            _crack_state['running'] = False
+        return {'ok': True}
+
     def get_theme(self):
         return {'mode': self.config.get('theme_mode', 'dark')}
 
@@ -1312,6 +1345,13 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
         </svg>
         <span class="nl">保护</span>
       </button>
+      <button class="nav-item" data-view="crack" onclick="switchView('crack')">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+        </svg>
+        <span class="nl">破解密码</span>
+      </button>
       <button class="nav-item" data-view="settings" onclick="switchView('settings')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
@@ -1320,7 +1360,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
         <span class="nl">设置</span>
       </button>
     </nav>
-    <div class="sidebar-ft" style="text-align:center;width:100%">Beta1.0</div>
+    <div class="sidebar-ft" style="text-align:center;width:100%">Beta1.2</div>
   </aside>
 
   <div class="content">
@@ -1473,6 +1513,70 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
         </div>
       </div>
     </div>
+
+    <!-- 破解密码 -->
+    <div id="view-crack" class="view-page" style="display:none">
+      <div class="ch">
+        <h2>破解密码</h2>
+        <p>基于 PASSWORDV3 算法暴力破解希沃密码（6 位数字）</p>
+      </div>
+      <div class="cb">
+
+        <!-- 冰点还原 -->
+        <div class="card">
+          <div class="ct">破解冰点还原密码</div>
+          <div id="freeze-info" class="ai" style="font-size:11px;line-height:1.8">正在检测配置文件...</div>
+          <div id="freeze-path-area" style="display:none;margin-top:6px">
+            <div class="ig">
+              <label>SeewoCore.ini 路径</label>
+              <input type="text" id="freeze-path-input" placeholder="C:\ProgramData\Seewo\SeewoCore\SeewoCore.ini" style="font-size:11px">
+            </div>
+            <button class="btn btn-sm btn-pri" onclick="confirmCrackPath('freeze')" style="margin-top:4px">重新检测</button>
+          </div>
+          <div id="freeze-control" style="margin-top:8px">
+            <button id="btn-crack-freeze" class="btn btn-pri" onclick="doCrack('freeze')" style="display:none">开始破解</button>
+          </div>
+          <div id="freeze-progress" style="display:none;margin-top:8px">
+            <div style="background:var(--bg-c);border-radius:4px;height:8px;overflow:hidden">
+              <div id="freeze-bar" style="width:0%;height:100%;background:var(--ac);transition:width .2s"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--tx-b);margin-top:4px">
+              <span id="freeze-status">准备中...</span>
+              <span id="freeze-pct">0%</span>
+            </div>
+            <div id="freeze-result" style="margin-top:6px;font-size:13px;font-weight:600;padding:6px 10px;border-radius:6px"></div>
+          </div>
+        </div>
+
+        <!-- 锁屏密码 -->
+        <div class="card">
+          <div class="ct">破解锁屏密码</div>
+          <div id="lock-info" class="ai" style="font-size:11px;line-height:1.8">正在检测配置文件...</div>
+          <div id="lock-path-area" style="display:none;margin-top:6px">
+            <div class="ig">
+              <label>SeewoLockConfig.ini 路径</label>
+              <input type="text" id="lock-path-input" placeholder="%APPDATA%\seewo\SeewoAbility\SeewoLockConfig.ini" style="font-size:11px">
+            </div>
+            <button class="btn btn-sm btn-pri" onclick="confirmCrackPath('lock')" style="margin-top:4px">重新检测</button>
+          </div>
+          <div id="lock-control" style="margin-top:8px">
+            <button id="btn-crack-lock" class="btn btn-pri" onclick="doCrack('lock')" style="display:none">开始破解</button>
+          </div>
+          <div id="lock-progress" style="display:none;margin-top:8px">
+            <div style="background:var(--bg-c);border-radius:4px;height:8px;overflow:hidden">
+              <div id="lock-bar" style="width:0%;height:100%;background:var(--ac);transition:width .2s"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--tx-b);margin-top:4px">
+              <span id="lock-status">准备中...</span>
+              <span id="lock-pct">0%</span>
+            </div>
+            <div id="lock-result" style="margin-top:6px;font-size:13px;font-weight:600;padding:6px 10px;border-radius:6px"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1600,6 +1704,9 @@ function switchView(name){
   if(name==='protection'){
     if(_targetMode==='window')loadTargets();
     startPreview();
+  }else if(name==='crack'){
+    loadCrackView();
+    stopPreview();
   }else{stopPreview()}
 }
 
@@ -1877,6 +1984,116 @@ function updateModeInfo(){
     if(desc)desc.textContent='启动后远程监视只能看到黑屏';
   }
 }
+
+// ── 密码破解 ──
+var _crackTimer = null;
+var _crackConfigs = {};
+
+function loadCrackView(){
+  window.pywebview.api.get_crack_config('freeze').then(function(r){
+    renderCrackInfo('freeze', r);
+  });
+  window.pywebview.api.get_crack_config('lock').then(function(r){
+    renderCrackInfo('lock', r);
+  });
+}
+
+function renderCrackInfo(type, info){
+  var infoEl = document.getElementById(type+'-info');
+  var pathArea = document.getElementById(type+'-path-area');
+  var btn = document.getElementById('btn-crack-'+type);
+  if(!infoEl)return;
+  _crackConfigs[type] = info;
+  if(info.found){
+    var lines = [];
+    lines.push('<strong>配置文件:</strong> '+info.ini_path);
+    lines.push('<strong>PartA:</strong> '+info.part_a);
+    lines.push('<strong>DeviceID:</strong> '+info.device_id);
+    lines.push('<strong>MachineID:</strong> '+info.machine_id);
+    lines.push('<strong>Salt:</strong> '+info.salt);
+    infoEl.innerHTML = lines.join('<br>');
+    infoEl.style.color = '';
+    if(pathArea)pathArea.style.display='none';
+    if(btn)btn.style.display='';
+  }else{
+    infoEl.innerHTML = '<span style="color:var(--ng)">❌ '+info.error+'</span>';
+    if(pathArea)pathArea.style.display='block';
+    if(btn)btn.style.display='none';
+  }
+}
+
+function confirmCrackPath(type){
+  var input = document.getElementById(type+'-path-input');
+  if(!input || !input.value.trim())return;
+  window.pywebview.api.get_crack_config(type, input.value.trim()).then(function(r){
+    renderCrackInfo(type, r);
+  });
+}
+
+function doCrack(type){
+  var progress = document.getElementById(type+'-progress');
+  var btn = document.getElementById('btn-crack-'+type);
+  var resultEl = document.getElementById(type+'-result');
+
+  if(_crackTimer){
+    clearInterval(_crackTimer);
+    _crackTimer = null;
+  }
+
+  window.pywebview.api.start_crack(type).then(function(r){
+    if(!r.ok){
+      var statusEl = document.getElementById(type+'-status');
+      if(statusEl)statusEl.textContent=r.msg||'启动失败';
+      return;
+    }
+    progress.style.display='block';
+    btn.style.display='none';
+    if(resultEl){
+      resultEl.textContent='';
+      resultEl.style.display='none';
+    }
+    _crackTimer = setInterval(function(){ pollCrackProgress(type); }, 200);
+  });
+}
+
+function pollCrackProgress(type){
+  window.pywebview.api.get_crack_progress().then(function(state){
+    var bar = document.getElementById(type+'-bar');
+    var pctEl = document.getElementById(type+'-pct');
+    var statusEl = document.getElementById(type+'-status');
+    var resultEl = document.getElementById(type+'-result');
+    var btn = document.getElementById('btn-crack-'+type);
+    if(!bar)return;
+
+    var pct = state.total > 0 ? (state.current / state.total * 100) : 0;
+    bar.style.width = Math.min(pct, 100)+'%';
+    if(pctEl)pctEl.textContent = Math.round(pct)+'%';
+
+    if(state.running){
+      if(statusEl)statusEl.textContent = '破解中... 尝试 '+('000000'+state.current).slice(-6)+' / 999999';
+    } else if(state.found){
+      if(statusEl)statusEl.textContent = '✅ 破解完成！';
+      if(resultEl){
+        resultEl.style.display='block';
+        resultEl.style.background='rgba(46,204,113,.15)';
+        resultEl.style.color='var(--ok)';
+        resultEl.textContent = '🔑 密码: '+state.password;
+      }
+      if(btn)btn.style.display='';
+      if(_crackTimer){clearInterval(_crackTimer);_crackTimer=null}
+    } else if(state.error){
+      if(statusEl)statusEl.textContent = '❌ 破解失败';
+      if(resultEl){
+        resultEl.style.display='block';
+        resultEl.style.background='rgba(231,76,60,.12)';
+        resultEl.style.color='var(--ng)';
+        resultEl.textContent = state.error;
+      }
+      if(btn)btn.style.display='';
+      if(_crackTimer){clearInterval(_crackTimer);_crackTimer=null}
+    }
+  });
+}
 </script>
 </body>
 </html>"""
@@ -2030,6 +2247,180 @@ class TrayIcon:
 
 
 # =========================================================================
+# 密码破解服务 (PASSWORDV3 暴力破解)
+# =========================================================================
+
+_crack_lock = threading.Lock()
+_crack_state = {
+    'running': False,
+    'current': 0,
+    'total': 1,
+    'found': False,
+    'password': None,
+    'error': None,
+    'crack_type': None,
+}
+
+def _get_machine_id():
+    """从注册表读取 MachineID (UUID 格式)"""
+    try:
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Microsoft\SQMClient")
+        val, _ = winreg.QueryValueEx(key, "MachineId")
+        winreg.CloseKey(key)
+        if val:
+            return val.strip('{}').upper()
+        return ''
+    except Exception:
+        return ''
+
+def _parse_passwordv3(data):
+    """解析 96 hex PASSWORDV3 → (part_a, part_b)"""
+    data = (data or '').strip()
+    if len(data) != 96:
+        return None, None
+    try:
+        int(data, 16)
+    except ValueError:
+        return None, None
+    return data[:16], data[32:]  # PartA(16), skip(16), PartB(64)
+
+def _read_ini_key(filepath, key):
+    """读取 INI 文件中任意段的指定键值"""
+    if not os.path.isfile(filepath):
+        return None
+    # 先尝试 configparser
+    try:
+        cp = configparser.ConfigParser()
+        cp.read(filepath, encoding='utf-8')
+        for sec in cp.sections():
+            if cp.has_option(sec, key):
+                return cp.get(sec, key)
+    except Exception:
+        pass
+    try:
+        cp = configparser.ConfigParser()
+        cp.read(filepath, encoding='gbk')
+        for sec in cp.sections():
+            if cp.has_option(sec, key):
+                return cp.get(sec, key)
+    except Exception:
+        pass
+    # fallback: 逐行搜索
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                if '=' in line:
+                    k, v = line.split('=', 1)
+                    if k.strip().lower() == key.lower():
+                        return v.strip()
+    except Exception:
+        pass
+    return None
+
+def _get_crack_config(crack_type, custom_path=None):
+    """获取破解所需配置信息"""
+    if crack_type == 'freeze':
+        if custom_path:
+            ini_path = custom_path
+        else:
+            pd = os.environ.get('ProgramData', 'C:\\ProgramData')
+            ini_path = os.path.join(pd, 'Seewo', 'SeewoCore', 'SeewoCore.ini')
+            if not os.path.exists(ini_path):
+                ini_path = os.path.join('C:\\ProgramData', 'Seewo', 'SeewoCore', 'SeewoCore.ini')
+    elif crack_type == 'lock':
+        if custom_path:
+            ini_path = custom_path
+        else:
+            ad = os.environ.get('APPDATA', '')
+            ini_path = os.path.join(ad, 'seewo', 'SeewoAbility', 'SeewoLockConfig.ini')
+    else:
+        return {'found': False, 'error': f'未知类型: {crack_type}'}
+
+    if not os.path.exists(ini_path):
+        return {'found': False, 'error': f'文件不存在: {ini_path}', 'searched': ini_path}
+
+    if crack_type == 'freeze':
+        password_hash = _read_ini_key(ini_path, 'PASSWORDV3')
+        device_id = _read_ini_key(ini_path, 'id')
+        label = '冰点还原/管理员密码'
+        key_name = 'PASSWORDV3'
+    else:
+        password_hash = _read_ini_key(ini_path, 'LockPasswardV3')
+        device_id = _read_ini_key(ini_path, 'id')
+        label = '锁屏密码'
+        key_name = 'LockPasswardV3'
+
+    if not password_hash:
+        return {'found': False, 'error': f'未找到 {key_name}', 'searched': ini_path}
+
+    part_a, part_b = _parse_passwordv3(password_hash)
+    if not part_a:
+        return {'found': False, 'error': f'{key_name} 格式无效 (需要 96 hex)', 'searched': ini_path}
+
+    if not device_id:
+        # 从 SeewoCore.ini 补充读取 device_id
+        pd = os.environ.get('ProgramData', 'C:\\ProgramData')
+        core_ini = os.path.join(pd, 'Seewo', 'SeewoCore', 'SeewoCore.ini')
+        if os.path.exists(core_ini):
+            device_id = _read_ini_key(core_ini, 'id')
+
+    machine_id = _get_machine_id()
+    if not device_id:
+        return {'found': False, 'error': '未找到 DeviceID', 'searched': ini_path}
+    if not machine_id:
+        return {'found': False, 'error': '未找到 MachineID (注册表)', 'searched': ini_path}
+
+    salt = f"@{part_a}!{device_id}&{machine_id}^mf-hu90"
+    return {
+        'found': True,
+        'ini_path': ini_path,
+        'part_a': part_a,
+        'part_b': part_b,
+        'device_id': device_id,
+        'machine_id': machine_id,
+        'salt': salt,
+        'label': label,
+        'key_name': key_name,
+    }
+
+def _crack_worker():
+    """后台暴力破解线程"""
+    global _crack_state
+    with _crack_lock:
+        config = _crack_state.get('_config')
+        if not config:
+            return
+        part_b = config['part_b'].lower()
+        salt = config['salt']
+        _crack_state['running'] = True
+        _crack_state['current'] = 0
+        _crack_state['total'] = 1000000
+        _crack_state['found'] = False
+        _crack_state['password'] = None
+        _crack_state['error'] = None
+
+    for i in range(1000000):
+        with _crack_lock:
+            if not _crack_state.get('running', False):
+                return
+            _crack_state['current'] = i
+        pwd = f"{i:06d}"
+        h = hashlib.sha256((pwd + salt).encode('utf-8')).hexdigest()
+        if h == part_b:
+            with _crack_lock:
+                _crack_state['found'] = True
+                _crack_state['password'] = pwd
+                _crack_state['running'] = False
+            return
+
+    with _crack_lock:
+        _crack_state['running'] = False
+        if not _crack_state.get('found'):
+            _crack_state['error'] = '未找到匹配密码（非 6 位数字密码或哈希不匹配）'
+
+
+# =========================================================================
 # pywebview 窗口
 # =========================================================================
 
@@ -2101,7 +2492,7 @@ def start_gui(overlay_mgr, config):
 
 def main():
     print("=" * 48)
-    print("  OakSeewoManager Beta1.0 -- 全屏远程监视屏蔽")
+    print("  OakSeewoManager Beta1.2 -- 全屏远程监视屏蔽")
     print("=" * 48)
     print()
 
