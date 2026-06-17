@@ -47,6 +47,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 :: Copy supporting files
 if exist ".\config.json" copy ".\config.json" ".\OSM_exe\config.json" >nul
+if exist ".\Oak.ico" copy ".\Oak.ico" ".\OSM_exe\Oak.ico" >nul
 copy "OakSeewoManager.bat" ".\OSM_exe\OakSeewoManager.bat" >nul
 echo OakSeewoManager.bat >> ".\OSM_exe\.gitignore" 2>nul
 

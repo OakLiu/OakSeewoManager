@@ -1213,6 +1213,67 @@ class WebApi:
             return {'ok': True}
         return {'ok': False}
 
+    def get_window_pos(self):
+        """获取窗口位置（供 frameless 拖拽使用）"""
+        import webview
+        if webview.windows:
+            w = webview.windows[0]
+            try:
+                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
+                rect = wintypes.RECT()
+                user32.GetWindowRect(h, ctypes.byref(rect))
+                return {'x': rect.left, 'y': rect.top}
+            except Exception:
+                pass
+        return {'x': 0, 'y': 0}
+
+    def move_window_to(self, x, y):
+        """移动窗口到指定位置（供 frameless 拖拽使用）"""
+        import webview
+        if webview.windows:
+            w = webview.windows[0]
+            try:
+                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
+                user32.SetWindowPos(h, 0, int(x), int(y), 0, 0, 0x0005)
+            except Exception:
+                pass
+
+    def minimize_window(self):
+        import webview
+        if webview.windows:
+            try:
+                h = webview.windows[0].native.handle if hasattr(webview.windows[0].native, 'handle') else int(webview.windows[0].native)
+                user32.ShowWindow(h, 6)
+            except Exception:
+                pass
+
+    def toggle_maximize_window(self):
+        import webview
+        if webview.windows:
+            w = webview.windows[0]
+            try:
+                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
+                class _WP(ctypes.Structure):
+                    _fields_ = [
+                        ('length', wintypes.UINT), ('flags', wintypes.UINT), ('showCmd', wintypes.UINT),
+                        ('ptMinPos', ctypes.c_long * 2), ('ptMaxPos', ctypes.c_long * 2),
+                        ('rcNormalPos', ctypes.c_long * 4),
+                    ]
+                wp = _WP()
+                wp.length = ctypes.sizeof(wp)
+                user32.GetWindowPlacement(h, ctypes.byref(wp))
+                if wp.showCmd == 3:
+                    user32.ShowWindow(h, 9)
+                else:
+                    user32.ShowWindow(h, 3)
+            except Exception:
+                pass
+
+    def close_window(self):
+        import webview
+        if webview.windows:
+            webview.windows[0].hide()
+
     def _exit(self):
         import webview
         if webview.windows:
@@ -1230,7 +1291,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>OakSeewoManager</title>
 <style>
-:root{--bg-a:#1a1a2e;--bg-b:#16213e;--bg-c:#0f3460;--bg-d:#1a1a2e;--bd:#1a4a7a;--tx-a:#e0e0e0;--tx-b:#888;--tx-c:#fff;--ac:#e94560;--ac-h:#d63851;--ok:#2ecc71;--ng:#e74c3c}
+:root{--bg-a:#0d1117;--bg-b:#161b22;--bg-c:#21262d;--bg-d:#161b22;--bd:#30363d;--tx-a:#c9d1d9;--tx-b:#8b949e;--tx-c:#f0f6fc;--ac:#58a6ff;--ac-h:#4a8de0;--ok:#3fb950;--ng:#f85149}
 [data-theme="light"]{--bg-a:#f5f5f7;--bg-b:#fff;--bg-c:#e8e8ed;--bg-d:#fff;--bd:#d1d1d6;--tx-a:#1d1d1f;--tx-b:#888;--tx-c:#000;--ac:#007aff;--ac-h:#0066d6;--ok:#34c759;--ng:#ff3b30}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
@@ -1243,7 +1304,12 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 .app-layout{display:none;height:100vh;width:100vw}
 .app-layout.active{display:flex}
 .app-layout .sidebar{width:130px;flex-shrink:0;height:100vh;display:flex;flex-direction:column;padding:10px 0;border-right:1px solid var(--bd);background:var(--bg-c)}
-.sidebar-logo{margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--tx-c)}
+.sidebar-logo{margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:6px;color:var(--tx-c);user-select:none}
+.window-controls{position:absolute;top:0;right:0;z-index:9999;display:none;height:32px;align-items:center}
+.wc-btn{width:36px;height:32px;border:none;background:transparent;color:var(--tx-b);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:system-ui;transition:.1s}
+.wc-btn:hover{background:var(--bd);color:var(--tx-a)}
+.wc-btn.wc-close:hover{background:var(--ng);color:#fff}
+#app-layout.frameless .window-controls{display:flex}
 .sidebar-logo svg{width:20px;height:20px}
 .sidebar-logo span{font-size:13px;font-weight:600}
 .sidebar-nav{display:flex;flex-direction:column;gap:2px;flex:1;padding:0 6px}
@@ -1330,9 +1396,14 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
   </div>
 </div>
 
-<div id="app-layout" class="app-layout">
+<div id="app-layout" class="app-layout __FRAMELESS__">
+  <div id="window-controls" class="window-controls">
+      <button class="wc-btn" onclick="minimizeWin()" title="最小化">─</button>
+      <button class="wc-btn" onclick="maximizeWin()" title="最大化">□</button>
+      <button class="wc-btn wc-close" onclick="closeWin()" title="关闭">✕</button>
+    </div>
   <aside class="sidebar">
-    <div class="sidebar-logo" style="flex-direction:row">
+    <div id="window-drag-handle" class="sidebar-logo" style="flex-direction:row;cursor:grab">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       </svg>
@@ -1343,7 +1414,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
-        <span class="nl">保护</span>
+        <span class="nl">防窥屏</span>
       </button>
       <button class="nav-item" data-view="crack" onclick="switchView('crack')">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -1367,7 +1438,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
     <!-- 保护 -->
     <div id="view-protection" class="view-page">
       <div class="ch">
-        <h2>屏幕保护</h2>
+        <h2>防窥屏</h2>
         <p id="mode-desc">启动后远程监视只能看到黑屏</p>
       </div>
       <div class="cb">
@@ -1498,18 +1569,6 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
           <button class="btn btn-pri btn-sm" onclick="doChangePw()">确认修改</button>
           <div id="cpw-err" class="msg err"></div>
           <div id="cpw-ok" class="msg ok"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 设置结尾: 关于 -->
-        <div class="card">
-          <div class="ai" style="text-align:center;padding:8px 0">
-            <strong>OakSeewoManager</strong> v3.0<br>
-            基于 SetWindowDisplayAffinity API<br><br>
-            Windows 8+ · Python 3 + pywebview<br>
-            仅供合法隐私保护用途。
-          </div>
         </div>
       </div>
     </div>
@@ -2094,6 +2153,30 @@ function pollCrackProgress(type){
     }
   });
 }
+
+// ── 窗口拖拽（frameless 模式） ──
+(function(){
+  var handle = document.getElementById('window-drag-handle');
+  if(!handle)return;
+  var dragging = false, dSX = 0, dSY = 0, wSX = 0, wSY = 0;
+  handle.addEventListener('mousedown', function(e){
+    if(e.button !== 0)return;
+    dragging = true; dSX = e.screenX; dSY = e.screenY;
+    window.pywebview.api.get_window_pos().then(function(p){
+      wSX = p.x; wSY = p.y;
+    });
+  });
+  document.addEventListener('mousemove', function(e){
+    if(!dragging)return;
+    window.pywebview.api.move_window_to(wSX + (e.screenX - dSX), wSY + (e.screenY - dSY));
+  });
+  document.addEventListener('mouseup', function(){dragging = false;});
+})();
+
+// ── 窗口控制按钮 ──
+function minimizeWin(){window.pywebview.api.minimize_window();}
+function maximizeWin(){window.pywebview.api.toggle_maximize_window();}
+function closeWin(){window.pywebview.api.close_window();}
 </script>
 </body>
 </html>"""
@@ -2103,6 +2186,7 @@ def get_html(has_password, require_password=True, preview_enabled=True, preview_
     html = HTML_TEMPLATE
     html = html.replace('__HAS_PASSWORD__', 'true' if has_password else 'false')
     html = html.replace('__REQUIRE_PASSWORD__', 'true' if require_password else 'false')
+    html = html.replace('__FRAMELESS__', 'frameless' if getattr(sys, 'frozen', False) else '')
     html = html.replace('__PREVIEW_ENABLED__', 'true' if preview_enabled else 'false')
     html = html.replace('__PREVIEW_INTERVAL__', str(preview_interval))
     return html
@@ -2173,11 +2257,32 @@ class TrayIcon:
 
         # 加载图标
         hicon = None
-        ico_path = os.path.join(BASE_DIR, 'Oak.ico')
-        if os.path.exists(ico_path):
-            hicon = user32.LoadImageW(None, ico_path, 1, 32, 32, 0x10)
+        # 尝试多个路径查找 Oak.ico
+        ico_candidates = [os.path.join(BASE_DIR, 'Oak.ico')]
+        if getattr(sys, 'frozen', False):
+            ico_candidates.append(os.path.join(os.path.dirname(BASE_DIR), 'Oak.ico'))
+        for p in ico_candidates:
+            if os.path.exists(p):
+                hicon = user32.LoadImageW(None, p, 1, 32, 32, 0x10)
+                if hicon:
+                    break
+        # 回退: 尝试从 EXE 嵌入资源加载
+        if not hicon and getattr(sys, 'frozen', False):
+            for resid in (1, 101, 32514, 32518):
+                try:
+                    hicon = user32.LoadImageW(
+                        kernel32.GetModuleHandleW(None),
+                        ctypes.c_void_p(resid), 1, 32, 32, 0)
+                    if hicon:
+                        break
+                except Exception:
+                    pass
+        # 最终回退: Windows 系统图标
         if not hicon:
-            hicon = user32.LoadCursorW(None, ctypes.c_void_p(32516))
+            for sys_id in (32518, 32512):  # IDI_SHIELD, IDI_APPLICATION
+                hicon = user32.LoadImageW(None, ctypes.c_void_p(sys_id), 1, 32, 32, 0x10)
+                if hicon:
+                    break
 
         # 构造 NOTIFYICONDATAW (ctypes 自动处理对齐)
         nid = NIDW()
@@ -2438,7 +2543,7 @@ def start_gui(overlay_mgr, config):
         height=600,
         min_size=(640, 480),
         resizable=True,
-        frameless=False,
+        frameless=getattr(sys, 'frozen', False),
     )
 
     def restore_win():
