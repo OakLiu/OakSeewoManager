@@ -1,6 +1,6 @@
 @echo off
 cd /d "%~dp0"
-python screen_guard.py
+python OakSeewoManager.py
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo [Error] Python not found or error occurred.

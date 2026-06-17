@@ -14,7 +14,7 @@
 ## 使用
 
 ```bash
-python screen_guard.py
+python OakSeewoManager.py
 ```
 
 首次运行 -> 设置密码 -> 登录后在设置页选择保护模式。
@@ -33,7 +33,7 @@ python screen_guard.py
 build_exe.bat
 ```
 
-输出到 `OSM_exe\ScreenGuard.exe`
+输出到 `OSM_exe\OakSeewoManager.exe`
 
 ## 技术原理
 
@@ -62,8 +62,8 @@ build_exe.bat
 
 ```
 OakSeewoManager/
-  screen_guard.py      # 主程序
-  screen_guard.bat     # 双击启动
+  OakSeewoManager.py      # 主程序
+  OakSeewoManager.bat     # 双击启动
   build_exe.bat        # EXE 打包脚本
   Oak.ico              # 程序图标
   OSM_exe.zip          # 预打包 EXE

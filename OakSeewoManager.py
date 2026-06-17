@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-ScreenGuard v3.0 — 全屏远程监视屏蔽 (pywebview 内嵌窗口版)
+OakSeewoManager v3.0 — 全屏远程监视屏蔽 (pywebview 内嵌窗口版)
 ===========================================================
 
 基于 SetWindowDisplayAffinity(WDA_MONITOR) 创建全屏透明覆盖层，
 使远程监视/录屏软件只能捕获到黑屏。
 
 使用方式:
-  双击 screen_guard.bat 启动
+  双击 OakSeewoManager.bat 启动
   首次运行 -> 设置密码
   后续运行 -> 输入密码进入控制面板
   关闭窗口 -> 保护继续后台运行 (控制台 Ctrl+C 完全退出)
@@ -15,6 +15,7 @@ ScreenGuard v3.0 — 全屏远程监视屏蔽 (pywebview 内嵌窗口版)
 
 import ctypes
 from ctypes import wintypes
+import threading
 import time
 import json
 import hashlib
@@ -142,6 +143,18 @@ user32.SetCursor.argtypes = [wintypes.HANDLE]
 user32.SetCursor.restype = wintypes.HANDLE
 user32.LoadCursorW.argtypes = [wintypes.HANDLE, ctypes.c_void_p]
 user32.LoadCursorW.restype = wintypes.HANDLE
+user32.LoadImageW.argtypes = [wintypes.HANDLE, wintypes.LPCWSTR, wintypes.UINT, ctypes.c_int, ctypes.c_int, wintypes.UINT]
+user32.LoadImageW.restype = wintypes.HANDLE
+user32.CreatePopupMenu.argtypes = []
+user32.CreatePopupMenu.restype = wintypes.HANDLE
+user32.DestroyMenu.argtypes = [wintypes.HANDLE]
+user32.DestroyMenu.restype = wintypes.BOOL
+user32.AppendMenuW.argtypes = [wintypes.HANDLE, wintypes.UINT, ctypes.c_void_p, wintypes.LPCWSTR]
+user32.AppendMenuW.restype = wintypes.BOOL
+user32.TrackPopupMenu.argtypes = [wintypes.HANDLE, wintypes.UINT, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.HWND, ctypes.c_void_p]
+user32.TrackPopupMenu.restype = wintypes.BOOL
+user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+user32.SetForegroundWindow.restype = wintypes.BOOL
 user32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
 user32.GetCursorPos.restype = wintypes.BOOL
 user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
@@ -733,7 +746,7 @@ def _ov_service():
     target_mode = config.get('target_mode', 'fullscreen')
     targets = config.get('target_windows', [])
     _ov_log(f"target_mode={target_mode}, targets_count={len(targets)}")
-    class_name = "ScreenGuardOverlay"
+    class_name = "OsmOverlay"
     hinstance = kernel32.GetModuleHandleW(None)
     wc = wintypes.WNDCLASSEXW()
     wc.cbSize = ctypes.sizeof(wintypes.WNDCLASSEXW)
@@ -849,7 +862,7 @@ def _picker_service_main():
 
 def _picker_impl():
     hinstance = kernel32.GetModuleHandleW(None)
-    cls = "SGPickerGray"
+    cls = "OsmPickerGray"
     wc = wintypes.WNDCLASSEXW()
     wc.cbSize = ctypes.sizeof(wintypes.WNDCLASSEXW)
     wc.style = 0
@@ -1165,7 +1178,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>ScreenGuard</title>
+<title>OakSeewoManager</title>
 <style>
 :root{--bg-a:#1a1a2e;--bg-b:#16213e;--bg-c:#0f3460;--bg-d:#1a1a2e;--bd:#1a4a7a;--tx-a:#e0e0e0;--tx-b:#888;--tx-c:#fff;--ac:#e94560;--ac-h:#d63851;--ok:#2ecc71;--ng:#e74c3c}
 [data-theme="light"]{--bg-a:#f5f5f7;--bg-b:#fff;--bg-c:#e8e8ed;--bg-d:#fff;--bd:#d1d1d6;--tx-a:#1d1d1f;--tx-b:#888;--tx-c:#000;--ac:#007aff;--ac-h:#0066d6;--ok:#34c759;--ng:#ff3b30}
@@ -1238,7 +1251,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 
 <div id="page-login" class="fullpage">
   <div class="fp-card">
-    <h1>ScreenGuard</h1>
+    <h1>OakSeewoManager</h1>
     <p class="sub">全屏远程监视屏蔽</p>
     <div class="ig">
       <label>密码</label>
@@ -1251,7 +1264,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 
 <div id="page-setup" class="fullpage">
   <div class="fp-card">
-    <h1>ScreenGuard</h1>
+    <h1>OakSeewoManager</h1>
     <p class="sub">首次使用，请设置密码</p>
     <div class="ig">
       <label>设置密码</label>
@@ -1422,7 +1435,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
     <!-- 设置结尾: 关于 -->
         <div class="card">
           <div class="ai" style="text-align:center;padding:8px 0">
-            <strong>ScreenGuard</strong> v3.0<br>
+            <strong>OakSeewoManager</strong> v3.0<br>
             基于 SetWindowDisplayAffinity API<br><br>
             Windows 8+ · Python 3 + pywebview<br>
             仅供合法隐私保护用途。
@@ -1806,6 +1819,144 @@ def get_html(has_password, require_password=True):
 
 
 # =========================================================================
+# 托盘图标
+# =========================================================================
+
+class NIDW(ctypes.Structure):
+    """NOTIFYICONDATAW 结构体 (ctypes 自动处理 x64 对齐)"""
+    _fields_ = [
+        ('cbSize',            wintypes.DWORD),
+        ('hWnd',              wintypes.HWND),
+        ('uID',               wintypes.UINT),
+        ('uFlags',            wintypes.UINT),
+        ('uCallbackMessage',  wintypes.UINT),
+        ('hIcon',             wintypes.HANDLE),
+        ('szTip',             wintypes.WCHAR * 128),
+        ('dwState',           wintypes.DWORD),
+        ('dwStateMask',       wintypes.DWORD),
+        ('szInfo',            wintypes.WCHAR * 256),
+        ('uTimeout',          wintypes.UINT),
+        ('szInfoTitle',       wintypes.WCHAR * 64),
+        ('dwInfoFlags',       wintypes.DWORD),
+        ('guidItem',          ctypes.c_byte * 16),
+        ('hBalloonIcon',      wintypes.HANDLE),
+    ]
+
+
+class TrayIcon:
+    """系统托盘图标 — 独立线程消息循环"""
+
+    def __init__(self):
+        self._thread = None
+        self._hwnd = None
+        self._nid = None
+        self._restore_fn = None
+        self._toggle_fn = None
+        self._status_fn = None
+        self._started = threading.Event()
+
+    def start(self, restore_fn, toggle_fn, status_fn, quit_fn=None):
+        self._restore_fn = restore_fn
+        self._toggle_fn = toggle_fn
+        self._status_fn = status_fn
+        self._quit_fn = quit_fn
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        self._started.wait()
+
+    def stop(self):
+        if self._hwnd:
+            user32.PostThreadMessageW(self._thread.ident, WM_QUIT, 0, 0)
+            self._hwnd = None
+
+    def _run(self):
+        hinst = kernel32.GetModuleHandleW(None)
+        cls = "SGTrayW"
+        wc = wintypes.WNDCLASSEXW()
+        wc.cbSize = ctypes.sizeof(wintypes.WNDCLASSEXW)
+        wc.lpfnWndProc = WNDPROC(self._wndproc)
+        wc.hInstance = hinst
+        wc.lpszClassName = cls
+        atom = user32.RegisterClassExW(ctypes.byref(wc))
+        self._hwnd = user32.CreateWindowExW(0, cls, "", WS_POPUP, 0, 0, 0, 0, None, None, hinst, None)
+        self._started.set()
+
+        # 加载图标
+        hicon = None
+        ico_path = os.path.join(BASE_DIR, 'Oak.ico')
+        if os.path.exists(ico_path):
+            hicon = user32.LoadImageW(None, ico_path, 1, 32, 32, 0x10)
+        if not hicon:
+            hicon = user32.LoadCursorW(None, ctypes.c_void_p(32516))
+
+        # 构造 NOTIFYICONDATAW (ctypes 自动处理对齐)
+        nid = NIDW()
+        nid.cbSize = ctypes.sizeof(NIDW)
+        nid.hWnd = self._hwnd
+        nid.uID = 1
+        nid.uFlags = 0x0007  # NIF_MESSAGE | NIF_ICON | NIF_TIP
+        nid.uCallbackMessage = 0x8000  # WM_APP
+        nid.hIcon = hicon
+        nid.szTip = "OakSeewoManager"
+        nid.dwState = 0
+        nid.dwStateMask = 0
+
+        shell32 = ctypes.windll.shell32
+        shell32.Shell_NotifyIconW.argtypes = [wintypes.DWORD, ctypes.c_void_p]
+        shell32.Shell_NotifyIconW.restype = wintypes.BOOL
+        ret = shell32.Shell_NotifyIconW(0, ctypes.byref(nid))  # NIM_ADD
+        print(f"[Tray] Shell_NotifyIconW NIM_ADD: {ret}", flush=True)
+        self._nid = nid
+
+        # 消息循环 (DispatchMessageW 调用 _wndproc 处理托盘消息)
+        msg = wintypes.MSG()
+        while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+            user32.TranslateMessage(ctypes.byref(msg))
+            user32.DispatchMessageW(ctypes.byref(msg))
+
+        # 删除托盘图标
+        if self._nid:
+            shell32.Shell_NotifyIconW(1, ctypes.byref(self._nid))  # NIM_DELETE
+        if atom:
+            user32.UnregisterClassW(cls, hinst)
+
+    def _wndproc(self, hwnd, msg, wparam, lparam):
+        if msg == WM_DESTROY:
+            return 0
+        if msg == 0x8000:  # WM_APP = 托盘回调
+            ev = lparam & 0xFFFF
+            if ev in (0x0202, 0x0201):
+                if self._restore_fn:
+                    self._restore_fn()
+                return 0
+            elif ev == 0x0204:
+                self._show_menu()
+                return 0
+        return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+    def _show_menu(self):
+        menu = user32.CreatePopupMenu()
+        is_active = self._status_fn() if self._status_fn else False
+        txt = "关闭屏幕保护" if is_active else "开启屏幕保护"
+        user32.AppendMenuW(menu, 0, 1001, txt)
+        user32.AppendMenuW(menu, 0x0800, 0, "")
+        user32.AppendMenuW(menu, 0, 1002, "退出")
+        pt = wintypes.POINT()
+        user32.GetCursorPos(ctypes.byref(pt))
+        user32.SetForegroundWindow(self._hwnd)
+        cmd = user32.TrackPopupMenu(menu, 0x0100, pt.x, pt.y, 0, self._hwnd, None)
+        user32.DestroyMenu(menu)
+        if cmd == 1001 and self._toggle_fn:
+            self._toggle_fn()
+        elif cmd == 1002:
+            if self._quit_fn:
+                self._quit_fn()
+            else:
+                import os
+                os._exit(0)
+
+
+# =========================================================================
 # pywebview 窗口
 # =========================================================================
 
@@ -1814,7 +1965,7 @@ def start_gui(overlay_mgr, config):
     import webview
 
     html = get_html('password_hash' in config, config.get('require_password', True))
-    webview.create_window(
+    window = webview.create_window(
         'OakSeewoManager',
         html=html,
         js_api=api,
@@ -1824,8 +1975,49 @@ def start_gui(overlay_mgr, config):
         resizable=True,
         frameless=False,
     )
+
+    def restore_win():
+        if webview.windows:
+            w = webview.windows[0]
+            w.show()
+            w.on_top = True
+            try:
+                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
+                user32.SetForegroundWindow(h)
+            except:
+                pass
+
+    def toggle_protection():
+        import threading
+        def _do():
+            if api.overlay.is_active():
+                api.overlay.destroy_overlay()
+            else:
+                api.overlay.create_overlay()
+        threading.Thread(target=_do, daemon=True).start()
+
+    def do_quit():
+        if config.get('close_with_gui') and api.overlay.is_active():
+            try:
+                api.overlay.destroy_overlay()
+            except:
+                pass
+        import time
+        time.sleep(0.3)
+        os._exit(0)
+
+    tray = TrayIcon()
+    tray.start(restore_win, toggle_protection, lambda: api.overlay.is_active(), do_quit)
+
+    def on_closing():
+        window.hide()
+        return False
+
+    window.events.closing += on_closing
+
     webview.start(gui=None, debug=False)
 
+    tray.stop()
     return api.overlay.is_active()
 
 
@@ -1877,7 +2069,7 @@ def main():
     else:
         print("[*] 保护未激活, 直接退出")
 
-    print("[*] ScreenGuard GUI 已退出")
+    print("[*] OakSeewoManager GUI 已退出")
 
 
 if __name__ == "__main__":
