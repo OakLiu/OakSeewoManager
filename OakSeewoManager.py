@@ -109,6 +109,10 @@ user32.PeekMessageW.restype = wintypes.BOOL
 # PostMessage / PostThreadMessage
 user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 user32.PostMessageW.restype = wintypes.BOOL
+user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+user32.SendMessageW.restype = LONG_PTR
+user32.ReleaseCapture.argtypes = []
+user32.ReleaseCapture.restype = wintypes.BOOL
 user32.PostThreadMessageW.argtypes = [wintypes.DWORD, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 user32.PostThreadMessageW.restype = wintypes.BOOL
 
@@ -1213,28 +1217,15 @@ class WebApi:
             return {'ok': True}
         return {'ok': False}
 
-    def get_window_pos(self):
-        """获取窗口位置（供 frameless 拖拽使用）"""
+    def start_window_drag(self):
+        """启动原生窗口拖拽"""
         import webview
         if webview.windows:
             w = webview.windows[0]
             try:
                 h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
-                rect = wintypes.RECT()
-                user32.GetWindowRect(h, ctypes.byref(rect))
-                return {'x': rect.left, 'y': rect.top}
-            except Exception:
-                pass
-        return {'x': 0, 'y': 0}
-
-    def move_window_to(self, x, y):
-        """移动窗口到指定位置（供 frameless 拖拽使用）"""
-        import webview
-        if webview.windows:
-            w = webview.windows[0]
-            try:
-                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
-                user32.SetWindowPos(h, 0, int(x), int(y), 0, 0, 0x0005)
+                user32.ReleaseCapture()
+                user32.SendMessageW(h, 0x00A1, 2, 0)
             except Exception:
                 pass
 
@@ -2157,20 +2148,12 @@ function pollCrackProgress(type){
 // ── 窗口拖拽（frameless 模式） ──
 (function(){
   var handle = document.getElementById('window-drag-handle');
-  if(!handle)return;
-  var dragging = false, dSX = 0, dSY = 0, wSX = 0, wSY = 0, posReady = false;
-  handle.addEventListener('mousedown', function(e){
-    if(e.button !== 0)return;
-    dragging = true; dSX = e.screenX; dSY = e.screenY; posReady = false;
-    window.pywebview.api.get_window_pos().then(function(p){
-      wSX = p.x; wSY = p.y; posReady = true;
+  if(handle){
+    handle.addEventListener('mousedown', function(e){
+      if(e.button !== 0)return;
+      window.pywebview.api.start_window_drag();
     });
-  });
-  document.addEventListener('mousemove', function(e){
-    if(!dragging || !posReady)return;
-    window.pywebview.api.move_window_to(wSX + (e.screenX - dSX), wSY + (e.screenY - dSY));
-  });
-  document.addEventListener('mouseup', function(){dragging = false;});
+  }
 })();
 
 // ── 窗口控制按钮 ──
