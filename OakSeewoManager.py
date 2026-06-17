@@ -1055,6 +1055,23 @@ class WebApi:
         except Exception as ex:
             return {'ok': False, 'msg': str(ex)}
 
+    def get_preview_config(self):
+        return {
+            'enabled': self.config.get('preview_enabled', True),
+            'interval': self.config.get('preview_interval', 2.0)
+        }
+
+    def set_preview_config(self, data):
+        if data is None:
+            return {'ok': False}
+        if 'enabled' in data:
+            self.config['preview_enabled'] = bool(data['enabled'])
+        if 'interval' in data:
+            interval = float(data['interval'])
+            self.config['preview_interval'] = max(0.5, min(5.0, interval))
+        save_config(self.config)
+        return {'ok': True}
+
     def get_theme(self):
         return {'mode': self.config.get('theme_mode', 'dark')}
 
@@ -1352,13 +1369,26 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
             <button id="btn-close-behavior" class="toggle-btn" onclick="doToggleCloseBehavior()"></button>
           </div>
         </div>
-        <div class="card" style="text-align:center">
+        <div class="card">
           <div class="ct">远程监视画面模拟</div>
-          <div id="preview-box" style="background:#000;border-radius:6px;overflow:hidden;margin:0 auto;
+          <div class="theme-row" style="justify-content:space-between">
+            <span class="theme-row-label">启用预览</span>
+            <button id="btn-preview-toggle" class="toggle-btn" onclick="doTogglePreview()"></button>
+          </div>
+          <div id="preview-interval-row" class="theme-row" style="justify-content:space-between;margin-top:10px">
+            <span class="theme-row-label">刷新间隔</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input type="range" id="preview-interval-slider" min="0.5" max="5" step="0.5"
+                value="__PREVIEW_INTERVAL__" oninput="doSetPreviewInterval(this.value)"
+                style="width:100px;accent-color:var(--ac);height:4px;cursor:pointer">
+              <span id="preview-interval-label" style="font-size:12px;color:var(--tx-b);min-width:38px;text-align:right">2.0s</span>
+            </div>
+          </div>
+          <div id="preview-box" style="background:#000;border-radius:6px;overflow:hidden;margin:14px auto 0;
             max-width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center">
             <span style="color:#555;font-size:12px">正在加载预览...</span>
           </div>
-          <div style="margin-top:6px;font-size:10px;color:var(--tx-b)">每 2 秒刷新 · 仅供参考</div>
+          <div id="preview-info" style="margin-top:6px;font-size:10px;color:var(--tx-b);text-align:center">每 2 秒刷新 · 仅供参考</div>
         </div>
       </div>
     </div>
@@ -1469,6 +1499,8 @@ function _goHome(fromLogin){
   if(!HAS_PASSWORD && REQ_PASSWORD){showPage('page-setup'); return;}
   hide('page-login');hide('page-setup');show('app-layout');
   switchView('protection');
+  applyPreviewToggle(_previewEnabled);
+  applyPreviewInterval(_previewInterval);
   window.pywebview.api.get_status().then(function(s){
     if(s.protected){protected=true;updateStatus()}
     applyReqPw(REQ_PASSWORD);
@@ -1499,16 +1531,55 @@ function showPage(id){document.querySelectorAll('.fullpage').forEach(function(p)
 // ── 远程监视画面模拟 ──
 var _previewPoll = null;
 var _previewBox = null;
+var _previewEnabled = __PREVIEW_ENABLED__;
+var _previewInterval = __PREVIEW_INTERVAL__;
+function applyPreviewToggle(val){
+  var btn=document.getElementById('btn-preview-toggle');
+  if(btn)btn.classList.toggle('on',val);
+  var row=document.getElementById('preview-interval-row');
+  if(row)row.style.display=val?'flex':'none';
+  var info=document.getElementById('preview-info');
+  if(info)info.style.display=val?'block':'none';
+  if(!val)stopPreview();
+  else if(document.getElementById('view-protection') &&
+    document.getElementById('view-protection').style.display!=='none')startPreview();
+}
+function applyPreviewInterval(val){
+  val=Math.max(0.5,Math.min(5,parseFloat(val)));
+  _previewInterval=val;
+  var label=document.getElementById('preview-interval-label');
+  if(label)label.textContent=val.toFixed(1)+'s';
+  var slider=document.getElementById('preview-interval-slider');
+  if(slider)slider.value=val;
+  var info=document.getElementById('preview-info');
+  if(info)info.textContent='每 '+val.toFixed(1)+' 秒刷新 · 仅供参考';
+  if(_previewPoll){
+    stopPreview();
+    if(_previewEnabled)startPreview();
+  }
+}
+function doTogglePreview(){
+  _previewEnabled=!_previewEnabled;
+  applyPreviewToggle(_previewEnabled);
+  window.pywebview.api.set_preview_config({enabled:_previewEnabled});
+}
+function doSetPreviewInterval(val){
+  val=Math.max(0.5,Math.min(5,parseFloat(val)));
+  applyPreviewInterval(val);
+  window.pywebview.api.set_preview_config({interval:val});
+}
 function startPreview(){
+  if(!_previewEnabled)return;
   var box=document.getElementById('preview-box');
   if(!box)return;
   _previewBox=box;
   if(_previewPoll)clearInterval(_previewPoll);
-  _previewPoll=setInterval(updatePreview,2000);
+  _previewPoll=setInterval(updatePreview, _previewInterval*1000);
   updatePreview();
 }
 function stopPreview(){
   if(_previewPoll){clearInterval(_previewPoll);_previewPoll=null}
+  if(_previewBox)_previewBox.innerHTML='<span style="color:#888;font-size:11px">预览已关闭</span>';
 }
 function updatePreview(){
   window.pywebview.api.get_preview().then(function(r){
@@ -1811,10 +1882,12 @@ function updateModeInfo(){
 </html>"""
 
 
-def get_html(has_password, require_password=True):
+def get_html(has_password, require_password=True, preview_enabled=True, preview_interval=2.0):
     html = HTML_TEMPLATE
     html = html.replace('__HAS_PASSWORD__', 'true' if has_password else 'false')
     html = html.replace('__REQUIRE_PASSWORD__', 'true' if require_password else 'false')
+    html = html.replace('__PREVIEW_ENABLED__', 'true' if preview_enabled else 'false')
+    html = html.replace('__PREVIEW_INTERVAL__', str(preview_interval))
     return html
 
 
@@ -1964,7 +2037,8 @@ def start_gui(overlay_mgr, config):
     api = WebApi(overlay_mgr, config)
     import webview
 
-    html = get_html('password_hash' in config, config.get('require_password', True))
+    html = get_html('password_hash' in config, config.get('require_password', True),
+                    config.get('preview_enabled', True), config.get('preview_interval', 2.0))
     window = webview.create_window(
         'OakSeewoManager',
         html=html,
