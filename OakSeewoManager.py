@@ -2158,16 +2158,16 @@ function pollCrackProgress(type){
 (function(){
   var handle = document.getElementById('window-drag-handle');
   if(!handle)return;
-  var dragging = false, dSX = 0, dSY = 0, wSX = 0, wSY = 0;
+  var dragging = false, dSX = 0, dSY = 0, wSX = 0, wSY = 0, posReady = false;
   handle.addEventListener('mousedown', function(e){
     if(e.button !== 0)return;
-    dragging = true; dSX = e.screenX; dSY = e.screenY;
+    dragging = true; dSX = e.screenX; dSY = e.screenY; posReady = false;
     window.pywebview.api.get_window_pos().then(function(p){
-      wSX = p.x; wSY = p.y;
+      wSX = p.x; wSY = p.y; posReady = true;
     });
   });
   document.addEventListener('mousemove', function(e){
-    if(!dragging)return;
+    if(!dragging || !posReady)return;
     window.pywebview.api.move_window_to(wSX + (e.screenX - dSX), wSY + (e.screenY - dSY));
   });
   document.addEventListener('mouseup', function(){dragging = false;});
