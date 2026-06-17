@@ -1,0 +1,26 @@
+# Changelog
+
+## [1.1.0] — 2026-06-17
+
+### 新增
+
+- 远程监视画面模拟：新增"启用预览"开关，可随时开启/关闭实时画面捕获
+- 刷新间隔调节：新增滑块控件（0.5s–5s），可调画面刷新频率
+- 设置持久化：preview_enabled、preview_interval 写入 config.json，重启后保留
+
+---
+
+## [1.0.0] — 2026-06-17
+
+### 新增
+
+- 全屏保护模式：透明覆盖层 + SetWindowDisplayAffinity(WDA_MONITOR)
+- 窗口保护模式：shellcode 注入到目标进程设置 WDA_MONITOR，覆盖层跟随窗口位置
+- 窗口选择器：灰色半透明遮罩，点击选择要保护的目标窗口
+- 远程监视画面模拟：实时 BitBlt 屏幕捕获预览（2 秒刷新）
+- 密码保护：SHA256 哈希，可开关登录密码
+- 亮/暗主题：支持跟随 Windows 系统主题
+- 系统托盘图标：右键菜单控制保护开关
+- GUI 基于 pywebview 内嵌 HTML/CSS/JS
+- 命令行参数：--overlay（覆盖层子进程）、--picker（窗口选择器子进程）、--test-window（注入测试）
+- EXE 打包：PyInstaller 输出到 OSM_exe/
