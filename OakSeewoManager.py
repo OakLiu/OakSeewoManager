@@ -959,6 +959,23 @@ def _picker_wndproc(hwnd, msg, wparam, lparam):
 # JS ↔ Python 桥接 API
 # =========================================================================
 
+def _get_hwnd(window):
+    """从 pywebview Window 获取原生 HWND（兼容不同 pywebview 版本）"""
+    if not window:
+        return None
+    for attr in ('handle', 'Handle', 'hwnd'):
+        try:
+            val = getattr(window.native, attr, None)
+            if val is not None:
+                if hasattr(val, 'ToInt64'):
+                    return val.ToInt64()
+                if hasattr(val, 'value'):
+                    return val.value
+                return int(val)
+        except (TypeError, ValueError):
+            continue
+    return None
+
 class WebApi:
     def __init__(self, overlay_mgr, config):
         self.overlay = overlay_mgr
@@ -1226,82 +1243,50 @@ class WebApi:
 
     def start_window_drag(self):
         """启动窗口拖拽：后台轮询光标位置，GetAsyncKeyState 检测释放"""
-        _log = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'osm_drag.log')
-        def _dbg(m): open(_log, 'a', encoding='utf-8').write(f"{m}\n")
-        _dbg("=== start_window_drag CALLED ===")
-
         if getattr(self, '_drag_thr', None) and self._drag_thr.is_alive():
-            _dbg("drag thread already alive, returning")
             return
-
         import webview
         if not webview.windows:
-            _dbg("NO webview.windows")
             return
-        w = webview.windows[0]
-
-        try:
-            h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
-            _dbg(f"hwnd = {h}")
-        except Exception as e:
-            _dbg(f"failed to get hwnd: {e}")
+        h = _get_hwnd(webview.windows[0])
+        if not h:
             return
-
         rect = wintypes.RECT()
-        r1 = user32.GetWindowRect(h, ctypes.byref(rect))
+        user32.GetWindowRect(h, ctypes.byref(rect))
         pt = wintypes.POINT()
-        r2 = user32.GetCursorPos(ctypes.byref(pt))
+        user32.GetCursorPos(ctypes.byref(pt))
         wx, wy = rect.left, rect.top
         cx, cy = pt.x, pt.y
-        _dbg(f"GetWindowRect({r1}): ({wx},{wy})-({rect.right},{rect.bottom})")
-        _dbg(f"GetCursorPos({r2}): ({cx},{cy})")
 
         def _loop():
-            _dbg("drag thread STARTED")
             try:
-                iter_n = 0
                 while user32.GetAsyncKeyState(0x01) & 0x8000:
-                    iter_n += 1
                     cur = wintypes.POINT()
                     user32.GetCursorPos(ctypes.byref(cur))
                     dx = cur.x - cx
                     dy = cur.y - cy
                     if dx or dy:
-                        ret = user32.SetWindowPos(h, 0, wx + dx, wy + dy, 0, 0, 0x0005)
-                        if iter_n == 1:
-                            _dbg(f"first move: dx={dx} dy={dy} SetWindowPos({ret})")
-                    if iter_n > 3000:
-                        _dbg("iter limit reached, breaking")
-                        break
+                        user32.SetWindowPos(h, 0, wx + dx, wy + dy, 0, 0, 0x0005)
                     time.sleep(0.008)
-                _dbg(f"drag thread EXIT (iter={iter_n}, keyState={user32.GetAsyncKeyState(0x01) & 0x8000})")
-            except Exception as e:
-                _dbg(f"drag thread EXCEPTION: {e}")
-
-        self._drag_thr = threading.Thread(target=_loop, daemon=True)
-        self._drag_thr.start()
-        _dbg("thread launched")
-
-    def minimize_window(self):
-        import webview
-        if webview.windows:
-            try:
-                h = webview.windows[0].native.handle if hasattr(webview.windows[0].native, 'handle') else int(webview.windows[0].native)
-                user32.ShowWindow(h, 6)
             except Exception:
                 pass
 
-    def toggle_maximize_window(self):
+        self._drag_thr = threading.Thread(target=_loop, daemon=True)
+        self._drag_thr.start()
+
+    def minimize_window(self):
         import webview
-        if webview.windows:
-            w = webview.windows[0]
+        h = _get_hwnd(webview.windows[0]) if webview.windows else None
+        if h:
+            try: user32.ShowWindow(h, 6)
+            except Exception: pass
+
+    def toggle_maximize_window(self):
+        h = _get_hwnd(webview.windows[0]) if webview.windows else None
+        if h:
             try:
-                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
                 style = user32.GetWindowLongW(h, -16)
-                if style & 0x00010000:
-                    user32.ShowWindow(h, 9)
-                else:
-                    user32.ShowWindow(h, 3)
+                user32.ShowWindow(h, 9 if style & 0x00010000 else 3)
             except Exception:
                 pass
 
@@ -2585,11 +2570,10 @@ def start_gui(overlay_mgr, config):
             w = webview.windows[0]
             w.show()
             w.on_top = True
-            try:
-                h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
-                user32.SetForegroundWindow(h)
-            except:
-                pass
+            h = _get_hwnd(w)
+            if h:
+                try: user32.SetForegroundWindow(h)
+                except: pass
 
     def toggle_protection():
         import threading
