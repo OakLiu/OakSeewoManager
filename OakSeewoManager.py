@@ -1431,9 +1431,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 <div id="app-layout" class="app-layout __FRAMELESS__">
   <div id="titlebar" class="titlebar">
     <div class="tb-brand">
-      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
+      <img src="__ICON_B64__" width="16" height="16" alt="" style="flex-shrink:0">
       <span class="tb-title">OakSeewoManager</span>
     </div>
     <div class="tb-controls">
@@ -2218,6 +2216,17 @@ def get_html(has_password, require_password=True, preview_enabled=True, preview_
     html = html.replace('__FRAMELESS__', 'frameless' if getattr(sys, 'frozen', False) else '')
     html = html.replace('__PREVIEW_ENABLED__', 'true' if preview_enabled else 'false')
     html = html.replace('__PREVIEW_INTERVAL__', str(preview_interval))
+    # 嵌入 Oak.ico 到标题栏
+    ico_b64 = ''
+    for p in (os.path.join(BASE_DIR, 'Oak.ico'), os.path.join(os.path.dirname(BASE_DIR), 'Oak.ico')):
+        if os.path.exists(p):
+            try:
+                with open(p, 'rb') as f:
+                    ico_b64 = 'data:image/x-icon;base64,' + base64.b64encode(f.read()).decode()
+            except Exception:
+                pass
+            break
+    html = html.replace('__ICON_B64__', ico_b64)
     return html
 
 
