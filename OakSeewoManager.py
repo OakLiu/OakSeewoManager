@@ -1226,38 +1226,61 @@ class WebApi:
 
     def start_window_drag(self):
         """启动窗口拖拽：后台轮询光标位置，GetAsyncKeyState 检测释放"""
+        _log = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'osm_drag.log')
+        def _dbg(m): open(_log, 'a', encoding='utf-8').write(f"{m}\n")
+        _dbg("=== start_window_drag CALLED ===")
+
         if getattr(self, '_drag_thr', None) and self._drag_thr.is_alive():
+            _dbg("drag thread already alive, returning")
             return
+
         import webview
         if not webview.windows:
+            _dbg("NO webview.windows")
             return
         w = webview.windows[0]
+
         try:
             h = w.native.handle if hasattr(w.native, 'handle') else int(w.native)
-        except Exception:
+            _dbg(f"hwnd = {h}")
+        except Exception as e:
+            _dbg(f"failed to get hwnd: {e}")
             return
+
         rect = wintypes.RECT()
-        user32.GetWindowRect(h, ctypes.byref(rect))
+        r1 = user32.GetWindowRect(h, ctypes.byref(rect))
         pt = wintypes.POINT()
-        user32.GetCursorPos(ctypes.byref(pt))
+        r2 = user32.GetCursorPos(ctypes.byref(pt))
         wx, wy = rect.left, rect.top
         cx, cy = pt.x, pt.y
+        _dbg(f"GetWindowRect({r1}): ({wx},{wy})-({rect.right},{rect.bottom})")
+        _dbg(f"GetCursorPos({r2}): ({cx},{cy})")
 
         def _loop():
+            _dbg("drag thread STARTED")
             try:
+                iter_n = 0
                 while user32.GetAsyncKeyState(0x01) & 0x8000:
+                    iter_n += 1
                     cur = wintypes.POINT()
                     user32.GetCursorPos(ctypes.byref(cur))
                     dx = cur.x - cx
                     dy = cur.y - cy
                     if dx or dy:
-                        user32.SetWindowPos(h, 0, wx + dx, wy + dy, 0, 0, 0x0005)
+                        ret = user32.SetWindowPos(h, 0, wx + dx, wy + dy, 0, 0, 0x0005)
+                        if iter_n == 1:
+                            _dbg(f"first move: dx={dx} dy={dy} SetWindowPos({ret})")
+                    if iter_n > 3000:
+                        _dbg("iter limit reached, breaking")
+                        break
                     time.sleep(0.008)
-            except Exception:
-                pass
+                _dbg(f"drag thread EXIT (iter={iter_n}, keyState={user32.GetAsyncKeyState(0x01) & 0x8000})")
+            except Exception as e:
+                _dbg(f"drag thread EXCEPTION: {e}")
 
         self._drag_thr = threading.Thread(target=_loop, daemon=True)
         self._drag_thr.start()
+        _dbg("thread launched")
 
     def minimize_window(self):
         import webview
