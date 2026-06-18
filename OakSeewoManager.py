@@ -1331,7 +1331,8 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 .app-layout{display:none;height:100vh;width:100vw;flex-direction:column}
 .app-layout.active{display:flex}
 .titlebar{height:32px;display:none;align-items:center;justify-content:space-between;background:var(--bg-c);flex-shrink:0;user-select:none;cursor:default}
-.titlebar .tb-title{font-size:12px;color:var(--tx-b);padding-left:12px;white-space:nowrap}
+.titlebar .tb-brand{display:flex;align-items:center;gap:6px;padding-left:10px}
+.titlebar .tb-title{font-size:12px;color:var(--tx-b);white-space:nowrap}
 .titlebar .tb-controls{display:flex;height:100%}
 .tb-btn{width:46px;height:32px;border:none;background:transparent;color:var(--tx-b);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:system-ui;transition:.1s}
 .tb-btn:hover{background:var(--bd);color:var(--tx-a)}
@@ -1429,10 +1430,14 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
 
 <div id="app-layout" class="app-layout __FRAMELESS__">
   <div id="titlebar" class="titlebar">
-    <span class="tb-title">OakSeewoManager</span>
+    <div class="tb-brand">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      <span class="tb-title">OakSeewoManager</span>
+    </div>
     <div class="tb-controls">
       <button class="tb-btn" onclick="minimizeWin()" title="最小化">─</button>
-      <button class="tb-btn" onclick="maximizeWin()" title="最大化">□</button>
       <button class="tb-btn tb-close" onclick="closeWin()" title="关闭">✕</button>
     </div>
   </div>
@@ -1466,7 +1471,7 @@ body{font-family:'Segoe UI','Microsoft YaHei',sans-serif;background:var(--bg-a);
         <span class="nl">设置</span>
       </button>
     </nav>
-    <div class="sidebar-ft" style="text-align:center;width:100%">Beta1.2</div>
+    <div class="sidebar-ft" style="text-align:center;width:100%">Beta1.3</div>
   </aside>
 
   <div class="content">
@@ -2200,7 +2205,6 @@ function pollCrackProgress(type){
   });
 })();
 function minimizeWin(){window.pywebview.api.minimize_window();}
-function maximizeWin(){window.pywebview.api.toggle_maximize_window();}
 function closeWin(){window.pywebview.api.close_window();}
 </script>
 </body>
@@ -2621,7 +2625,7 @@ def start_gui(overlay_mgr, config):
 
 def main():
     print("=" * 48)
-    print("  OakSeewoManager Beta1.2 -- 全屏远程监视屏蔽")
+    print("  OakSeewoManager Beta1.3 -- 全屏远程监视屏蔽")
     print("=" * 48)
     print()
 
