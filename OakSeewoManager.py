@@ -173,6 +173,8 @@ user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
 user32.GetWindowRect.restype = wintypes.BOOL
 user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.UINT]
 user32.SetWindowPos.restype = wintypes.BOOL
+user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+user32.FindWindowW.restype = wintypes.HWND
 user32.IsWindow.argtypes = [wintypes.HWND]
 user32.IsWindow.restype = wintypes.BOOL
 user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
@@ -311,6 +313,10 @@ kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
 kernel32.WaitForSingleObject.restype = wintypes.DWORD
 kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 kernel32.CloseHandle.restype = wintypes.BOOL
+kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
+kernel32.CreateMutexW.restype = wintypes.HANDLE
+kernel32.GetLastError.argtypes = []
+kernel32.GetLastError.restype = wintypes.DWORD
 kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
 kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
 
@@ -2628,6 +2634,16 @@ def main():
     except AttributeError:
         print("[-] 非 Windows 系统")
         sys.exit(1)
+
+    # ── 单实例检测：避免双击 EXE 产生多个托盘图标 ──
+    MUTEX_NAME = "Local\\OakSeewoManager_SingleInstance"
+    kernel32.CreateMutexW(None, False, MUTEX_NAME)
+    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        hwnd = user32.FindWindowW(None, "OakSeewoManager")
+        if hwnd:
+            user32.ShowWindow(hwnd, 1)   # SW_SHOWNORMAL
+            user32.SetForegroundWindow(hwnd)
+        sys.exit(0)
 
     config = load_config()
     overlay = OverlayManager()
